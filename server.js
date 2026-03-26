@@ -4,6 +4,7 @@ const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const { Resend } = require("resend");
+const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 const projectRoot = __dirname;
@@ -12,8 +13,19 @@ const resendApiKey = process.env.RESEND_API_KEY;
 const emailFrom = process.env.EMAIL_FROM || "Hablawithflow <onboarding@resend.dev>";
 const ownerEmail = process.env.OWNER_EMAIL || "";
 const publicSiteUrl = process.env.PUBLIC_SITE_URL || "https://hablawithflow.com";
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
+const supabaseAdmin =
+  supabaseUrl && supabaseServiceRoleKey
+    ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      })
+    : null;
 
 app.use(
   cors({
@@ -42,19 +54,104 @@ function ensureEmailServer(response) {
   return true;
 }
 
-function bookingHtml({ studentName, date, time, lessonType, message }) {
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatLessonDate(date) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
+}
+
+function toPortalUrl(pathname) {
+  return `${publicSiteUrl.replace(/\/$/, "")}${pathname}`;
+}
+
+function bookingHtml({ studentName, date, time, lessonType, message, accountSetupUrl, isExistingStudent }) {
+  const safeName = escapeHtml(studentName);
+  const safeLessonType = escapeHtml(lessonType);
+  const safeMessage = required(message) ? escapeHtml(message) : "";
+  const portalButtonLabel = isExistingStudent ? "Open Student Portal" : "Set Your Password";
+  const portalButtonUrl = accountSetupUrl || toPortalUrl("/student-portal.html");
+  const nextStepCopy = isExistingStudent
+    ? "Your account is already active, so you can log in to the student portal and manage your upcoming lessons there."
+    : "We created your student portal access for you. Use the button below to set your password and activate your account before class.";
+
   return `
-    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1a1a1a">
-      <h2 style="margin-bottom:8px">Your lesson is booked</h2>
-      <p>Hi ${studentName},</p>
-      <p>Your Hablawithflow lesson is confirmed.</p>
-      <ul>
-        <li><strong>Date:</strong> ${date}</li>
-        <li><strong>Time:</strong> ${time}</li>
-        <li><strong>Lesson type:</strong> ${lessonType}</li>
-      </ul>
-      ${message ? `<p><strong>Your note:</strong> ${message}</p>` : ""}
-      <p>You can log in to your student portal to see your lesson progress and upcoming sessions.</p>
+    <div style="margin:0;padding:32px 16px;background:#f6f1ea;font-family:Arial,sans-serif;color:#1a1a1a;">
+      <div style="max-width:640px;margin:0 auto;background:#fffdf9;border:1px solid #eadfd7;border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,0.08);">
+        <div style="padding:18px 28px;background:linear-gradient(135deg,#c0392b 0%,#cf4c35 100%);color:#ffffff;">
+          <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700;opacity:0.86;">Clase Confirmada</div>
+          <h1 style="margin:10px 0 0;font-size:30px;line-height:1.15;font-family:Georgia,serif;font-weight:700;">Your free trial lesson is booked</h1>
+        </div>
+
+        <div style="padding:32px 28px;">
+          <p style="margin:0 0 14px;font-size:18px;line-height:1.6;">Hi ${safeName},</p>
+          <p style="margin:0 0 22px;font-size:16px;line-height:1.7;color:#514741;">
+            Your Hablawithflow free trial is confirmed. Bienvenido. We are excited to meet you and get your Spanish moving with confidence.
+          </p>
+
+          <div style="margin:0 0 24px;padding:20px;border-radius:18px;background:#fbf5ef;border:1px solid #efe1d5;">
+            <div style="margin:0 0 14px;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;color:#8c5a47;">
+              Lesson details
+            </div>
+            <table role="presentation" style="width:100%;border-collapse:collapse;">
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Date</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${escapeHtml(formatLessonDate(date))}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Time</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${escapeHtml(time)}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Lesson type</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${safeLessonType}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="margin:0 0 24px;padding:18px 20px;border-radius:18px;background:#eaf7f4;border:1px solid #bfe7dc;">
+            <div style="margin:0 0 8px;font-size:14px;font-weight:700;color:#116d5a;">Next step</div>
+            <p style="margin:0;font-size:15px;line-height:1.7;color:#36504b;">
+              ${escapeHtml(nextStepCopy)}
+            </p>
+          </div>
+
+          ${
+            safeMessage
+              ? `
+                <div style="margin:0 0 24px;padding:18px 20px;border-radius:18px;background:#fff8ef;border:1px solid #f1dfc2;">
+                  <div style="margin:0 0 8px;font-size:14px;font-weight:700;color:#8c5a47;">Your note</div>
+                  <p style="margin:0;font-size:15px;line-height:1.7;color:#514741;">${safeMessage}</p>
+                </div>
+              `
+              : ""
+          }
+
+          <div style="margin:0 0 24px;">
+            <a href="${escapeHtml(portalButtonUrl)}" style="display:inline-block;padding:14px 22px;margin:0 12px 12px 0;border-radius:10px;background:#c0392b;color:#ffffff;text-decoration:none;font-weight:700;">
+              ${portalButtonLabel}
+            </a>
+            <a href="${toPortalUrl("/student-portal.html")}" style="display:inline-block;padding:14px 22px;margin:0 12px 12px 0;border-radius:10px;border:2px solid #1abc9c;color:#1abc9c;text-decoration:none;font-weight:700;">
+              Student Portal
+            </a>
+          </div>
+
+          <p style="margin:0;font-size:14px;line-height:1.7;color:#7c6e67;">
+            If you need to change anything before your lesson, reply to this email and we will help.
+          </p>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -123,6 +220,94 @@ function registrationHtml({ name, email, track, goal, timezone }) {
       </div>
     </div>
   `;
+}
+
+async function findAuthUserByEmail(email) {
+  if (!supabaseAdmin) {
+    return null;
+  }
+
+  let page = 1;
+  const normalizedEmail = email.trim().toLowerCase();
+
+  while (page <= 10) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+      page,
+      perPage: 200
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const users = data?.users || [];
+    const match = users.find((user) => (user.email || "").toLowerCase() === normalizedEmail);
+    if (match) {
+      return match;
+    }
+
+    if (users.length < 200) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return null;
+}
+
+async function createInviteLinkForTrialStudent({ studentName, email, lessonType, timezone, message }) {
+  if (!supabaseAdmin) {
+    return { ok: false, reason: "Supabase admin is not configured." };
+  }
+
+  const existingUser = await findAuthUserByEmail(email);
+  if (existingUser) {
+    return {
+      ok: true,
+      created: false,
+      existingUser: true,
+      accountSetupUrl: ""
+    };
+  }
+
+  const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+    type: "invite",
+    email,
+    options: {
+      redirectTo: toPortalUrl("/set-password.html")
+    },
+    data: {
+      full_name: studentName,
+      track: lessonType,
+      timezone: required(timezone) ? timezone : "Europe/London",
+      notes: required(message) ? message : "",
+      source: "free_trial_booking"
+    }
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const userId = data?.user?.id;
+  if (userId) {
+    await supabaseAdmin.from("profiles").upsert({
+      id: userId,
+      full_name: studentName,
+      track: lessonType,
+      timezone: required(timezone) ? timezone : "Europe/London",
+      goal: "Free trial lesson",
+      notes: required(message) ? message : "Student booked a free trial lesson."
+    });
+  }
+
+  return {
+    ok: true,
+    created: true,
+    existingUser: false,
+    accountSetupUrl: data?.properties?.action_link || ""
+  };
 }
 
 app.get("/api", (request, response) => {
@@ -259,6 +444,92 @@ app.post("/api/email/booking", async (request, response) => {
   } catch (error) {
     console.error("Failed to send booking email", error);
     jsonError(response, 500, "Failed to send booking email.");
+  }
+});
+
+app.post("/api/email/trial-booking", async (request, response) => {
+  if (!ensureEmailServer(response)) {
+    return;
+  }
+
+  const { studentName, email, date, time, lessonType, message, timezone } = request.body || {};
+
+  if (![studentName, email, date, time, lessonType].every(required)) {
+    jsonError(response, 400, "Missing trial booking email fields.");
+    return;
+  }
+
+  try {
+    let inviteOutcome = {
+      created: false,
+      existingUser: true,
+      accountSetupUrl: "",
+      accountSetupSent: false
+    };
+
+    if (supabaseAdmin) {
+      inviteOutcome = await createInviteLinkForTrialStudent({
+        studentName,
+        email,
+        lessonType,
+        timezone,
+        message
+      });
+      inviteOutcome.accountSetupSent = Boolean(inviteOutcome.accountSetupUrl);
+    }
+
+    const sends = [
+      resend.emails.send({
+        from: emailFrom,
+        to: email,
+        subject: inviteOutcome.existingUser
+          ? "Your Hablawithflow free trial is confirmed"
+          : "Your free trial is confirmed | Set your Hablawithflow password",
+        html: bookingHtml({
+          studentName,
+          date,
+          time,
+          lessonType,
+          message: required(message) ? message : "",
+          accountSetupUrl: inviteOutcome.accountSetupUrl,
+          isExistingStudent: inviteOutcome.existingUser
+        })
+      })
+    ];
+
+    if (required(ownerEmail)) {
+      sends.push(
+        resend.emails.send({
+          from: emailFrom,
+          to: ownerEmail,
+          subject: `New trial booking: ${studentName} on ${date} ${time}`,
+          html: `
+            <p><strong>Student:</strong> ${escapeHtml(studentName)}</p>
+            <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+            <p><strong>Date:</strong> ${escapeHtml(date)}</p>
+            <p><strong>Time:</strong> ${escapeHtml(time)}</p>
+            <p><strong>Lesson type:</strong> ${escapeHtml(lessonType)}</p>
+            <p><strong>Account flow:</strong> ${
+              inviteOutcome.existingUser ? "Existing student account" : "New password setup link sent"
+            }</p>
+            <p><strong>Message:</strong> ${required(message) ? escapeHtml(message) : "No note added."}</p>
+          `
+        })
+      );
+    }
+
+    await Promise.all(sends);
+
+    response.json({
+      ok: true,
+      message: "Trial booking emails sent.",
+      existingAccount: inviteOutcome.existingUser,
+      accountSetupSent: inviteOutcome.accountSetupSent,
+      accountSetupConfigured: Boolean(supabaseAdmin)
+    });
+  } catch (error) {
+    console.error("Failed to send trial booking email", error);
+    jsonError(response, 500, "Failed to send trial booking email.");
   }
 });
 

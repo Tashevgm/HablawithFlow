@@ -525,22 +525,30 @@ function bindBookingForm() {
     }
 
     try {
-      await window.HWFEmailApi.sendBookingEmail({
+      const emailResult = await window.HWFEmailApi.sendTrialBookingEmail({
         studentName,
         email,
         date: result.booking.date,
         time: result.booking.time,
         lessonType,
-        message
+        message,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London"
       });
-      emailMessage = " A confirmation email has been sent.";
+
+      if (emailResult.accountSetupSent) {
+        emailMessage = " We also emailed you a secure link to set your student portal password.";
+      } else if (emailResult.existingAccount) {
+        emailMessage = " A confirmation email has been sent, and you can log in with your existing student portal password.";
+      } else {
+        emailMessage = " A confirmation email has been sent.";
+      }
     } catch {
       emailMessage = " The booking saved, but the confirmation email could not be sent yet.";
     }
 
     setBookingFeedback(
       result.registration.created
-        ? `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. To use the student portal, register with the same email and create your password.${serverMessage}${emailMessage}`
+        ? `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}.${serverMessage}${emailMessage}`
         : `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. If you already registered, you can manage your lessons from the student portal.${serverMessage}${emailMessage}`,
       "success"
     );

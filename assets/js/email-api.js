@@ -39,5 +39,8 @@ window.HWFEmailApi = {
   },
   sendBookingEmail(payload) {
     return sendEmailRequest("/api/email/booking", payload);
+  },
+  sendTrialBookingEmail(payload) {
+    return sendEmailRequest("/api/email/trial-booking", payload);
   }
 };

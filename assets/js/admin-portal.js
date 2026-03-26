@@ -1,8 +1,8 @@
 const CALENDAR_START_HOUR = 8;
 const CALENDAR_END_HOUR = 20;
-const CALENDAR_STEP_MINUTES = 30;
+const CALENDAR_STEP_MINUTES = 60;
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const TEACHER_SESSION_KEY = "hwf_teacher_session";
+const APPROVED_TEACHER_EMAILS = ["vtsagov@gmail.com"];
 
 let currentWeekStart = getStartOfWeek(new Date());
 let currentView = "week";
@@ -121,16 +121,28 @@ function getOpenDates() {
   return [...new Set(getAvailability().map((slot) => slot.date))].sort();
 }
 
-function hasTeacherSession() {
-  return localStorage.getItem(TEACHER_SESSION_KEY) === "active";
+function isApprovedTeacherEmail(email) {
+  return APPROVED_TEACHER_EMAILS.includes((email || "").trim().toLowerCase());
 }
 
-function setTeacherSession(isActive) {
-  if (isActive) {
-    localStorage.setItem(TEACHER_SESSION_KEY, "active");
-  } else {
-    localStorage.removeItem(TEACHER_SESSION_KEY);
+function showTeacherError(message) {
+  const error = byId("admin-error");
+  if (!error) {
+    return;
   }
+
+  error.textContent = message;
+  error.hidden = false;
+}
+
+function clearTeacherError() {
+  const error = byId("admin-error");
+  if (!error) {
+    return;
+  }
+
+  error.hidden = true;
+  error.textContent = "";
 }
 
 function ensureFocusedDate() {
@@ -163,6 +175,31 @@ function showTeacherDashboard() {
   }
 
   renderAdminDashboard();
+}
+
+async function openTeacherDashboardFromSession() {
+  if (!window.supabaseClient) {
+    showTeacherError("Teacher login is not configured.");
+    return false;
+  }
+
+  const {
+    data: { user }
+  } = await window.supabaseClient.auth.getUser();
+
+  if (!user) {
+    return false;
+  }
+
+  if (!isApprovedTeacherEmail(user.email)) {
+    await window.supabaseClient.auth.signOut();
+    showTeacherError("This email is not approved for teacher access.");
+    return false;
+  }
+
+  clearTeacherError();
+  showTeacherDashboard();
+  return true;
 }
 
 function toggleSlot(date, time) {
@@ -612,18 +649,31 @@ function bindTeacherAuth() {
     return;
   }
 
-  button.addEventListener("click", () => {
-    const code = byId("admin-code").value.trim();
-    const error = byId("admin-error");
+  button.addEventListener("click", async () => {
+    const email = byId("admin-email").value.trim().toLowerCase();
+    const password = byId("admin-password").value;
 
-    if (code !== window.HWFData.getTeacherAccessCode()) {
-      error.textContent = "Incorrect access code.";
-      error.hidden = false;
+    if (!email || !password) {
+      showTeacherError("Enter your teacher email and password.");
       return;
     }
 
-    error.hidden = true;
-    setTeacherSession(true);
+    if (!isApprovedTeacherEmail(email)) {
+      showTeacherError("This email is not approved for teacher access.");
+      return;
+    }
+
+    const { error } = await window.supabaseClient.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) {
+      showTeacherError(error.message);
+      return;
+    }
+
+    clearTeacherError();
     showTeacherDashboard();
   });
 }
@@ -793,13 +843,15 @@ function bindTeacherLogout() {
     return;
   }
 
-  button.addEventListener("click", () => {
-    setTeacherSession(false);
+  button.addEventListener("click", async () => {
+    if (window.supabaseClient) {
+      await window.supabaseClient.auth.signOut();
+    }
     window.location.reload();
   });
 }
 
-function initAdminPortal() {
+async function initAdminPortal() {
   window.HWFData.ensurePortalState();
   bindTeacherAuth();
   bindCalendarControls();
@@ -808,9 +860,7 @@ function initAdminPortal() {
   bindStudentEditor();
   bindTeacherLogout();
 
-  if (hasTeacherSession()) {
-    showTeacherDashboard();
-  }
+  await openTeacherDashboardFromSession();
 }
 
 initAdminPortal();

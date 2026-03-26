@@ -10,10 +10,10 @@ const DEFAULT_PORTAL_STATE = {
   availability: [
     { id: "slot-1", date: "2026-03-28", time: "10:00" },
     { id: "slot-2", date: "2026-03-28", time: "14:00" },
-    { id: "slot-3", date: "2026-03-29", time: "11:30" },
+    { id: "slot-3", date: "2026-03-29", time: "11:00" },
     { id: "slot-4", date: "2026-03-31", time: "16:00" },
-    { id: "slot-5", date: "2026-04-01", time: "09:30" },
-    { id: "slot-6", date: "2026-04-02", time: "18:30" }
+    { id: "slot-5", date: "2026-04-01", time: "09:00" },
+    { id: "slot-6", date: "2026-04-02", time: "18:00" }
   ],
   bookings: [],
   students: [],
@@ -32,6 +32,19 @@ function sortByDateTime(items) {
   });
 }
 
+function uniqueByDateTime(items) {
+  const seen = new Set();
+
+  return items.filter((item) => {
+    const key = `${item.date}T${item.time}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
 function buildId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -40,11 +53,25 @@ function normalizeEmail(email) {
   return email.trim().toLowerCase();
 }
 
+function normalizeTimeToHour(time) {
+  if (typeof time !== "string" || !/^\d{2}:\d{2}$/.test(time)) {
+    return time;
+  }
+
+  const [hours] = time.split(":");
+  return `${hours}:00`;
+}
+
 function normalizeStudent(student) {
   return {
     ...student,
     email: normalizeEmail(student.email || ""),
-    upcomingLessons: Array.isArray(student.upcomingLessons) ? student.upcomingLessons : [],
+    upcomingLessons: Array.isArray(student.upcomingLessons)
+      ? student.upcomingLessons.map((lesson) => ({
+          ...lesson,
+          time: normalizeTimeToHour(lesson.time)
+        }))
+      : [],
     lessonHistory: Array.isArray(student.lessonHistory) ? student.lessonHistory : [],
     focusAreas: Array.isArray(student.focusAreas) ? student.focusAreas : []
   };
@@ -168,8 +195,20 @@ function upsertRegistrationFromBooking(booking, student) {
 
 function sanitizePortalState(state) {
   const nextState = {
-    availability: Array.isArray(state?.availability) ? state.availability : deepClone(DEFAULT_PORTAL_STATE.availability),
-    bookings: Array.isArray(state?.bookings) ? state.bookings : [],
+    availability: Array.isArray(state?.availability)
+      ? uniqueByDateTime(
+          state.availability.map((slot) => ({
+            ...slot,
+            time: normalizeTimeToHour(slot.time)
+          }))
+        )
+      : deepClone(DEFAULT_PORTAL_STATE.availability),
+    bookings: Array.isArray(state?.bookings)
+      ? state.bookings.map((booking) => ({
+          ...booking,
+          time: normalizeTimeToHour(booking.time)
+        }))
+      : [],
     students: Array.isArray(state?.students) ? state.students : [],
     teacherAccessCode:
       typeof state?.teacherAccessCode === "string" && state.teacherAccessCode.trim()
@@ -355,7 +394,7 @@ function registerStudent(registration) {
 function addAvailabilitySlot(slot) {
   const state = readPortalState();
   const date = slot.date;
-  const time = slot.time;
+  const time = normalizeTimeToHour(slot.time);
 
   const hasBooking = state.bookings.some((entry) => entry.date === date && entry.time === time);
   if (hasBooking) {
@@ -384,7 +423,7 @@ function addAvailabilitySlots(slots) {
 
   slots.forEach((slot) => {
     const date = slot.date;
-    const time = slot.time;
+    const time = normalizeTimeToHour(slot.time);
 
     const hasBooking = state.bookings.some((entry) => entry.date === date && entry.time === time);
     const duplicate = state.availability.some((entry) => entry.date === date && entry.time === time);

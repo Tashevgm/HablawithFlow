@@ -40,8 +40,8 @@
       <div class="portal-hero-card">
         <div class="stat-stack">
           <span class="stat-kicker">Teacher access</span>
-          <strong class="stat-number">vlad-admin</strong>
-          <span class="stat-caption">Use the same private teacher code here as on the calendar page.</span>
+          <strong class="stat-number stat-word">Approved emails only</strong>
+          <span class="stat-caption">Only whitelisted teacher accounts can open this dashboard.</span>
         </div>
       </div>
     </section>
@@ -56,11 +56,17 @@
       <div class="auth-card" id="admin-login-card">
         <h2>Teacher Login</h2>
         <p class="section-sub portal-sub">
-          Enter your teacher access code to open the student performance dashboard.
+          Sign in with your approved teacher email and password to open the student performance dashboard.
         </p>
-        <div class="form-group">
-          <label for="admin-code">Access Code</label>
-          <input type="password" id="admin-code" placeholder="Enter your teacher code">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="admin-email">Email</label>
+            <input type="email" id="admin-email" placeholder="teacher@email.com">
+          </div>
+          <div class="form-group">
+            <label for="admin-password">Password</label>
+            <input type="password" id="admin-password" placeholder="Enter your password">
+          </div>
         </div>
         <button class="btn-submit" id="admin-login" type="button">Open Dashboard</button>
         <div class="form-error" id="admin-error" hidden></div>
@@ -205,6 +211,8 @@
     <div class="footer-bottom">&copy; 2026 Hablawithflow. All rights reserved.</div>
   </footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/js/supabase-client.js"></script>
   <script src="assets/js/portal-data.js"></script>
   <script src="assets/js/admin-portal.js"></script>
 </body>
