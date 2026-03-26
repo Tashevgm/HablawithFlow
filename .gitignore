@@ -1,2 +1,6 @@
+node_modules/
+.env
 live-server.log
 live-server.err.log
+email-server.log
+email-server.err.log

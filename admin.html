@@ -31,26 +31,32 @@
     <section class="portal-hero">
       <div>
         <p class="hero-badge">Teacher Control Center</p>
-        <h1>Manage your calendar, bookings, and student progress in one place.</h1>
+        <h1>Manage your calendar and bookings in one focused place.</h1>
         <p class="hero-copy">
-          This portal keeps the same Hablawithflow look while giving you a working scheduling and
-          coaching dashboard.
+          Keep availability editing and upcoming bookings on one screen, without mixing them with
+          student performance tools.
         </p>
       </div>
       <div class="portal-hero-card">
         <div class="stat-stack">
-          <span class="stat-kicker">Demo access</span>
+          <span class="stat-kicker">Teacher access</span>
           <strong class="stat-number">vlad-admin</strong>
-          <span class="stat-caption">Use this access code to open the teacher dashboard locally.</span>
+          <span class="stat-caption">Use this private code to open the teacher dashboard on this test build.</span>
         </div>
       </div>
+    </section>
+
+    <section class="teacher-page-nav" aria-label="Teacher sections">
+      <a href="admin.html" class="teacher-page-link active">Calendar</a>
+      <a href="teacher-students.html" class="teacher-page-link">Students</a>
+      <button class="teacher-page-link teacher-logout" id="teacher-logout" type="button">Log Out</button>
     </section>
 
     <section class="portal-shell">
       <div class="auth-card" id="admin-login-card">
         <h2>Teacher Login</h2>
         <p class="section-sub portal-sub">
-          Enter your teacher access code to manage availability and student progress.
+          Enter your teacher access code to manage availability and upcoming bookings.
         </p>
         <div class="form-group">
           <label for="admin-code">Access Code</label>
@@ -184,87 +190,16 @@
           </article>
         </section>
 
-        <section class="portal-grid portal-grid-wide">
-          <div class="portal-column-stack">
-            <article class="dashboard-card">
-              <div class="card-heading">
-                <div>
-                  <h2>Upcoming Bookings</h2>
-                  <p class="portal-sub">Confirmed lessons created from the booking flow.</p>
-                </div>
-              </div>
-              <div class="stack-list" id="booking-list"></div>
-            </article>
-
-            <article class="dashboard-card">
-              <div class="card-heading">
-                <div>
-                  <h2>Student Roster Snapshot</h2>
-                  <p class="portal-sub">Quick overview of progress across your active learners.</p>
-                </div>
-              </div>
-              <div class="stack-list" id="student-roster"></div>
-            </article>
-          </div>
-
+        <section class="portal-grid portal-grid-full">
           <article class="dashboard-card">
             <div class="card-heading">
               <div>
-                <h2>Student Progress Editor</h2>
-                <p class="portal-sub">Update tracks, lesson counts, focus areas, and coaching notes.</p>
+                <h2>Upcoming Bookings</h2>
+                <p class="portal-sub">Confirmed lessons created from the booking flow.</p>
               </div>
+              <a href="teacher-students.html" class="btn-outline">Open Student Performance</a>
             </div>
-
-            <div class="form-group">
-              <label for="student-select">Student</label>
-              <select id="student-select"></select>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="student-track">Track</label>
-                <input type="text" id="student-track">
-              </div>
-              <div class="form-group">
-                <label for="student-level">Level</label>
-                <input type="text" id="student-level">
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="student-completed">Completed Lessons</label>
-                <input type="number" id="student-completed" min="0">
-              </div>
-              <div class="form-group">
-                <label for="student-total">Total Lessons</label>
-                <input type="number" id="student-total" min="1">
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="student-streak">Current Streak</label>
-                <input type="number" id="student-streak" min="0">
-              </div>
-              <div class="form-group">
-                <label for="student-milestone">Next Milestone</label>
-                <input type="text" id="student-milestone">
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="student-focus">Focus Areas</label>
-              <input type="text" id="student-focus" placeholder="Separate items with commas">
-            </div>
-
-            <div class="form-group">
-              <label for="student-note">Coach Note</label>
-              <textarea id="student-note" placeholder="Write the latest coaching note..."></textarea>
-            </div>
-
-            <button class="btn-submit" id="save-student" type="button">Save Student Progress</button>
-            <div id="student-save-message" class="booking-feedback" hidden></div>
+            <div class="stack-list" id="booking-list"></div>
           </article>
         </section>
       </div>
@@ -284,7 +219,8 @@
       </div>
       <div class="footer-col">
         <h4>Portal</h4>
-        <a href="admin.html">Teacher Dashboard</a>
+        <a href="admin.html">Teacher Calendar</a>
+        <a href="teacher-students.html">Student Performance</a>
       </div>
     </div>
     <div class="footer-bottom">&copy; 2026 Hablawithflow. All rights reserved.</div>

@@ -54,6 +54,80 @@ function saveStoredReviews(reviews) {
   localStorage.setItem(STUDENT_REVIEW_STORAGE_KEY, JSON.stringify(reviews));
 }
 
+async function loadSupabaseProfile(user) {
+  const metadata = user.user_metadata || {};
+  let profile = null;
+
+  const { data, error } = await window.supabaseClient
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!error && data) {
+    profile = data;
+  }
+
+  const profilePayload = {
+    id: user.id,
+    full_name:
+      (profile && (profile.full_name || profile.name)) ||
+      metadata.full_name ||
+      metadata.name ||
+      user.email.split("@")[0],
+    level: (profile && profile.level) || metadata.level || "Beginner",
+    track: (profile && profile.track) || metadata.track || "1-on-1",
+    timezone: (profile && profile.timezone) || metadata.timezone || "other",
+    goal: (profile && profile.goal) || metadata.goal || "Conversation",
+    notes: (profile && profile.notes) || metadata.notes || ""
+  };
+
+  if (profile) {
+    await window.supabaseClient
+      .from("profiles")
+      .update({
+        full_name: profilePayload.full_name,
+        level: profilePayload.level,
+        track: profilePayload.track,
+        timezone: profilePayload.timezone,
+        goal: profilePayload.goal,
+        notes: profilePayload.notes
+      })
+      .eq("id", user.id);
+  } else {
+    await window.supabaseClient.from("profiles").upsert(profilePayload);
+  }
+
+  return {
+    id: user.id,
+    name: profilePayload.full_name,
+    email: user.email,
+    level: profilePayload.level,
+    track: profilePayload.track,
+    timezone: profilePayload.timezone,
+    goal: profilePayload.goal,
+    notes: profilePayload.notes
+  };
+}
+
+async function openStudentDashboardFromSession() {
+  const {
+    data: { user }
+  } = await window.supabaseClient.auth.getUser();
+
+  if (!user) {
+    return;
+  }
+
+  const profile = await loadSupabaseProfile(user);
+  const student = window.HWFData.ensureStudentFromProfile(profile);
+
+  document.getElementById("student-error").hidden = true;
+  document.getElementById("student-login-card").hidden = true;
+  document.getElementById("student-dashboard").hidden = false;
+  renderStudentDashboard(student);
+}
+
 function setStudentStarPreview(rating) {
   document.querySelectorAll(".student-sp-star").forEach((star) => {
     star.classList.toggle("lit", Number(star.dataset.val) <= rating);
@@ -404,33 +478,35 @@ function bindStudentReviewForm() {
 }
 
 function bindStudentLogin() {
-  document.getElementById("student-login").addEventListener("click", () => {
+  document.getElementById("student-login").addEventListener("click", async () => {
     const email = document.getElementById("student-email").value;
-    const code = document.getElementById("student-code").value;
+    const password = document.getElementById("student-password").value;
     const error = document.getElementById("student-error");
-    const student = window.HWFData.getStudentByCredentials(email, code);
 
-    if (!student) {
-      error.textContent = "We could not match that email and access code.";
+    const { error: signInError } = await window.supabaseClient.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (signInError) {
+      error.textContent = signInError.message;
       error.hidden = false;
       return;
     }
 
-    error.hidden = true;
-    document.getElementById("student-login-card").hidden = true;
-    document.getElementById("student-dashboard").hidden = false;
-    renderStudentDashboard(student);
+    await openStudentDashboardFromSession();
   });
 
-  document.getElementById("student-logout").addEventListener("click", () => {
+  document.getElementById("student-logout").addEventListener("click", async () => {
     currentStudent = null;
     selectedStudentRating = 0;
     selectedStudentBookingDate = "";
     selectedStudentBookingTime = "";
+    await window.supabaseClient.auth.signOut();
     document.getElementById("student-login-card").hidden = false;
     document.getElementById("student-dashboard").hidden = true;
     document.getElementById("student-email").value = "";
-    document.getElementById("student-code").value = "";
+    document.getElementById("student-password").value = "";
     document.getElementById("student-review-feedback").hidden = true;
     document.getElementById("student-booking-feedback").hidden = true;
     document.getElementById("student-booking-message").value = "";
@@ -443,6 +519,7 @@ function initStudentPortal() {
   bindStudentLogin();
   bindStudentBookingSection();
   bindStudentReviewForm();
+  openStudentDashboardFromSession();
 }
 
 initStudentPortal();

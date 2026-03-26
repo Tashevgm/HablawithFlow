@@ -1,5 +1,10 @@
 const HWF_PORTAL_STORAGE_KEY = "hwf_portal_state_v1";
 const HWF_REGISTRATION_STORAGE_KEY = "hwf_registrations";
+const DEMO_STUDENT_EMAILS = new Set([
+  "maria@hablawithflow.com",
+  "james@hablawithflow.com",
+  "nina@hablawithflow.com"
+]);
 
 const DEFAULT_PORTAL_STATE = {
   availability: [
@@ -10,95 +15,8 @@ const DEFAULT_PORTAL_STATE = {
     { id: "slot-5", date: "2026-04-01", time: "09:30" },
     { id: "slot-6", date: "2026-04-02", time: "18:30" }
   ],
-  bookings: [
-    {
-      id: "booking-1",
-      studentName: "Maria Garcia",
-      email: "maria@hablawithflow.com",
-      date: "2026-03-27",
-      time: "18:00",
-      lessonType: "1-on-1",
-      message: "Airport, hotel, and restaurant practice.",
-      status: "confirmed"
-    },
-    {
-      id: "booking-2",
-      studentName: "James Patel",
-      email: "james@hablawithflow.com",
-      date: "2026-03-29",
-      time: "15:00",
-      lessonType: "1-on-1",
-      message: "Presentation rehearsal and negotiation phrases.",
-      status: "confirmed"
-    }
-  ],
-  students: [
-    {
-      id: "student-1",
-      name: "Maria Garcia",
-      email: "maria@hablawithflow.com",
-      accessCode: "mariaflow",
-      track: "1-on-1",
-      level: "A2",
-      completedLessons: 8,
-      totalLessons: 12,
-      streak: 5,
-      coachNote: "Strong listening progress. Next focus is spontaneous speaking under time pressure.",
-      nextMilestone: "Order confidently and ask follow-up questions while traveling.",
-      focusAreas: ["Travel conversations", "Past tense", "Confidence"],
-      upcomingLessons: [
-        { date: "2026-03-27", time: "18:00", topic: "1-on-1" }
-      ],
-      lessonHistory: [
-        { date: "2026-03-20", topic: "Restaurant survival Spanish", status: "Completed" },
-        { date: "2026-03-17", topic: "Directions and transport", status: "Completed" },
-        { date: "2026-03-13", topic: "Confidence drills", status: "Completed" }
-      ]
-    },
-    {
-      id: "student-2",
-      name: "James Patel",
-      email: "james@hablawithflow.com",
-      accessCode: "jamesflow",
-      track: "1-on-1",
-      level: "B1",
-      completedLessons: 14,
-      totalLessons: 20,
-      streak: 7,
-      coachNote: "Vocabulary is strong. We are now tightening fluency and transitions during presentations.",
-      nextMilestone: "Lead a client meeting introduction without switching to English.",
-      focusAreas: ["Presentation flow", "Negotiation phrases", "Pronunciation"],
-      upcomingLessons: [
-        { date: "2026-03-29", time: "15:00", topic: "Pitch rehearsal" }
-      ],
-      lessonHistory: [
-        { date: "2026-03-22", topic: "Formal meeting openers", status: "Completed" },
-        { date: "2026-03-18", topic: "Client objection handling", status: "Completed" },
-        { date: "2026-03-14", topic: "Business vocabulary sprints", status: "Completed" }
-      ]
-    },
-    {
-      id: "student-3",
-      name: "Nina Rossi",
-      email: "nina@hablawithflow.com",
-      accessCode: "ninaflow",
-      track: "Group Classes",
-      level: "A1",
-      completedLessons: 4,
-      totalLessons: 10,
-      streak: 3,
-      coachNote: "Good consistency. We are building sentence structure and speaking confidence.",
-      nextMilestone: "Introduce yourself and describe daily routines with ease.",
-      focusAreas: ["Introductions", "Present tense", "Listening"],
-      upcomingLessons: [
-        { date: "2026-04-01", time: "17:00", topic: "Daily routine speaking circle" }
-      ],
-      lessonHistory: [
-        { date: "2026-03-19", topic: "Greetings and self-introduction", status: "Completed" },
-        { date: "2026-03-15", topic: "Numbers and time", status: "Completed" }
-      ]
-    }
-  ],
+  bookings: [],
+  students: [],
   teacherAccessCode: "vlad-admin"
 };
 
@@ -120,6 +38,16 @@ function buildId(prefix) {
 
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
+}
+
+function normalizeStudent(student) {
+  return {
+    ...student,
+    email: normalizeEmail(student.email || ""),
+    upcomingLessons: Array.isArray(student.upcomingLessons) ? student.upcomingLessons : [],
+    lessonHistory: Array.isArray(student.lessonHistory) ? student.lessonHistory : [],
+    focusAreas: Array.isArray(student.focusAreas) ? student.focusAreas : []
+  };
 }
 
 function readRegistrations() {
@@ -149,74 +77,134 @@ function buildUniqueAccessCode(name, students) {
   return candidate;
 }
 
-function createStudentProfile(booking, students) {
-  const accessCode = buildUniqueAccessCode(booking.studentName, students);
+function goalToFocusArea(goal) {
+  if (!goal || goal === "Not sure") {
+    return "Conversation";
+  }
+
+  if (goal === "Work") {
+    return "Professional Spanish";
+  }
+
+  return goal;
+}
+
+function createStudentProfile(details, students) {
+  const studentName = details.studentName || details.name;
+  const accessCode = buildUniqueAccessCode(studentName, students);
+  const track = details.track || details.lessonType || "1-on-1";
+  const level = details.level || "Beginner";
+  const focusArea = goalToFocusArea(details.goal);
+  const coachNote = details.message
+    ? `Welcome to Hablawithflow. Your note has been saved: "${details.message}".`
+    : "Welcome to Hablawithflow. Your first lesson is booked and your learning plan will start from there.";
 
   return {
     id: buildId("student"),
-    name: booking.studentName,
-    email: normalizeEmail(booking.email),
+    name: studentName,
+    email: normalizeEmail(details.email),
     accessCode,
-    track: booking.lessonType,
-    level: "Beginner",
+    track,
+    level,
     completedLessons: 0,
     totalLessons: 8,
     streak: 0,
-    coachNote: "Welcome to Hablawithflow. Your first lesson is booked and your learning plan will start from there.",
+    coachNote,
     nextMilestone: "Complete your first live lesson and set your personalized speaking goals.",
-    focusAreas: ["Confidence", "Conversation", booking.lessonType],
-    upcomingLessons: [
-      {
-        date: booking.date,
-        time: booking.time,
-        topic: booking.lessonType
-      }
-    ],
+    focusAreas: [...new Set(["Confidence", focusArea, track])],
+    upcomingLessons: details.date && details.time
+      ? [
+          {
+            date: details.date,
+            time: details.time,
+            topic: track
+          }
+        ]
+      : [],
     lessonHistory: []
   };
 }
 
-function upsertRegistrationFromBooking(booking) {
+function upsertRegistrationRecord(payload) {
   const registrations = readRegistrations();
-  const email = normalizeEmail(booking.email);
+  const email = normalizeEmail(payload.email);
   const existingIndex = registrations.findIndex((registration) => {
     return normalizeEmail(registration.email) === email;
   });
 
-  const payload = {
-    name: booking.studentName,
+  const nextRegistration = {
+    ...(existingIndex >= 0 ? registrations[existingIndex] : {}),
+    ...payload,
     email,
-    level: existingIndex >= 0 ? registrations[existingIndex].level || "Beginner" : "Beginner",
-    track: booking.lessonType,
-    timezone: existingIndex >= 0 ? registrations[existingIndex].timezone || "other" : "other",
-    goal: existingIndex >= 0 ? registrations[existingIndex].goal || "Conversation" : "Conversation",
-    message: booking.message,
-    submittedAt: new Date().toISOString(),
-    source: "booking"
+    updatedAt: new Date().toISOString()
   };
 
   if (existingIndex >= 0) {
-    registrations[existingIndex] = {
-      ...registrations[existingIndex],
-      ...payload
-    };
+    registrations[existingIndex] = nextRegistration;
   } else {
-    registrations.push(payload);
+    registrations.push({
+      ...nextRegistration,
+      submittedAt: nextRegistration.submittedAt || new Date().toISOString()
+    });
   }
 
   writeRegistrations(registrations);
+  return existingIndex >= 0 ? registrations[existingIndex] : registrations[registrations.length - 1];
+}
+
+function upsertRegistrationFromBooking(booking, student) {
+  return upsertRegistrationRecord({
+    name: booking.studentName,
+    email: booking.email,
+    level: student ? student.level : "Beginner",
+    track: booking.lessonType,
+    timezone: "other",
+    goal: student && student.focusAreas.length ? student.focusAreas[0] : "Conversation",
+    message: booking.message,
+    source: "booking",
+    accessCode: student ? student.accessCode : ""
+  });
+}
+
+function sanitizePortalState(state) {
+  const nextState = {
+    availability: Array.isArray(state?.availability) ? state.availability : deepClone(DEFAULT_PORTAL_STATE.availability),
+    bookings: Array.isArray(state?.bookings) ? state.bookings : [],
+    students: Array.isArray(state?.students) ? state.students : [],
+    teacherAccessCode:
+      typeof state?.teacherAccessCode === "string" && state.teacherAccessCode.trim()
+        ? state.teacherAccessCode.trim()
+        : DEFAULT_PORTAL_STATE.teacherAccessCode
+  };
+
+  nextState.bookings = nextState.bookings.filter((booking) => {
+    return booking && !DEMO_STUDENT_EMAILS.has(normalizeEmail(booking.email || ""));
+  });
+
+  nextState.students = nextState.students
+    .filter((student) => student && !DEMO_STUDENT_EMAILS.has(normalizeEmail(student.email || "")))
+    .map(normalizeStudent);
+
+  return nextState;
 }
 
 function readPortalState() {
   const raw = localStorage.getItem(HWF_PORTAL_STORAGE_KEY);
 
   if (!raw) {
-    const seeded = deepClone(DEFAULT_PORTAL_STATE);
+    const seeded = sanitizePortalState(deepClone(DEFAULT_PORTAL_STATE));
     localStorage.setItem(HWF_PORTAL_STORAGE_KEY, JSON.stringify(seeded));
     return seeded;
   }
 
-  return JSON.parse(raw);
+  const parsed = JSON.parse(raw);
+  const sanitized = sanitizePortalState(parsed);
+
+  if (JSON.stringify(parsed) !== JSON.stringify(sanitized)) {
+    localStorage.setItem(HWF_PORTAL_STORAGE_KEY, JSON.stringify(sanitized));
+  }
+
+  return sanitized;
 }
 
 function writePortalState(state) {
@@ -258,6 +246,110 @@ function getStudentByCredentials(email, accessCode) {
       );
     }) || null
   );
+}
+
+function getStudentByEmail(email) {
+  const normalizedEmail = normalizeEmail(email);
+
+  return (
+    readPortalState().students.find((student) => {
+      return student.email.toLowerCase() === normalizedEmail;
+    }) || null
+  );
+}
+
+function ensureStudentFromProfile(profile) {
+  const state = readPortalState();
+  const normalizedEmail = normalizeEmail(profile.email);
+
+  let student = state.students.find((entry) => entry.email === normalizedEmail) || null;
+
+  if (student) {
+    student.name = profile.name || profile.full_name || student.name;
+    student.track = profile.track || student.track;
+    student.level = profile.level || student.level;
+    student.focusAreas = [...new Set([
+      "Confidence",
+      goalToFocusArea(profile.goal || student.focusAreas[0] || "Conversation"),
+      profile.track || student.track
+    ])];
+
+    if (profile.notes) {
+      student.coachNote = profile.notes;
+    }
+  } else {
+    student = createStudentProfile(
+      {
+        name: profile.name || profile.full_name || normalizedEmail.split("@")[0],
+        email: normalizedEmail,
+        track: profile.track || "1-on-1",
+        level: profile.level || "Beginner",
+        goal: profile.goal || "Conversation",
+        message: profile.notes || ""
+      },
+      state.students
+    );
+    state.students.push(student);
+  }
+
+  writePortalState(state);
+  return student;
+}
+
+function registerStudent(registration) {
+  const state = readPortalState();
+  const normalizedEmail = normalizeEmail(registration.email);
+
+  if (!registration.name || !normalizedEmail || !registration.track || !registration.goal) {
+    return { ok: false, error: "Please complete your name, email, preferred track, and main goal." };
+  }
+
+  let student = state.students.find((entry) => entry.email === normalizedEmail) || null;
+  const created = !student;
+
+  if (student) {
+    student.name = registration.name;
+    student.track = registration.track;
+    student.level = registration.level || student.level || "Beginner";
+    student.focusAreas = [...new Set(["Confidence", goalToFocusArea(registration.goal), registration.track])];
+    if (registration.message) {
+      student.coachNote = `Registration updated. Latest student note: "${registration.message}".`;
+    }
+  } else {
+    student = createStudentProfile(
+      {
+        ...registration,
+        email: normalizedEmail
+      },
+      state.students
+    );
+    state.students.push(student);
+  }
+
+  writePortalState(state);
+
+  upsertRegistrationRecord({
+    name: registration.name,
+    email: normalizedEmail,
+    level: registration.level || "Beginner",
+    track: registration.track,
+    timezone: registration.timezone || "other",
+    goal: registration.goal,
+    message: registration.message,
+    source: "register",
+    accessCode: student.accessCode
+  });
+
+  return {
+    ok: true,
+    created,
+    student: {
+      id: student.id,
+      name: student.name,
+      email: student.email,
+      accessCode: student.accessCode
+    }
+  };
 }
 
 function addAvailabilitySlot(slot) {
@@ -331,6 +423,9 @@ function removeAvailabilitySlot(slotId) {
 function createBooking(booking) {
   const state = readPortalState();
   const normalizedEmail = normalizeEmail(booking.email);
+  const existingRegistration = readRegistrations().find((registration) => {
+    return normalizeEmail(registration.email) === normalizedEmail;
+  }) || null;
   const matchingSlot = state.availability.find((slot) => {
     return slot.date === booking.date && slot.time === booking.time;
   });
@@ -377,8 +472,15 @@ function createBooking(booking) {
   } else {
     matchingStudent = createStudentProfile(
       {
-        ...booking,
-        email: normalizedEmail
+        studentName: booking.studentName,
+        email: normalizedEmail,
+        lessonType: booking.lessonType,
+        track: existingRegistration ? existingRegistration.track : booking.lessonType,
+        level: existingRegistration ? existingRegistration.level : "Beginner",
+        goal: existingRegistration ? existingRegistration.goal : "Conversation",
+        message: booking.message,
+        date: booking.date,
+        time: booking.time
       },
       state.students
     );
@@ -392,7 +494,7 @@ function createBooking(booking) {
   upsertRegistrationFromBooking({
     ...booking,
     email: normalizedEmail
-  });
+  }, matchingStudent);
 
   writePortalState(state);
   return {
@@ -439,6 +541,9 @@ window.HWFData = {
   getTeacherAccessCode,
   getStudentById,
   getStudentByCredentials,
+  getStudentByEmail,
+  ensureStudentFromProfile,
+  registerStudent,
   addAvailabilitySlot,
   addAvailabilitySlots,
   removeAvailabilitySlot,

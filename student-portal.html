@@ -39,9 +39,9 @@
       </div>
       <div class="portal-hero-card">
         <div class="stat-stack">
-          <span class="stat-kicker">Demo student access</span>
-          <strong class="stat-number">maria@hablawithflow.com</strong>
-          <span class="stat-caption">Code: mariaflow</span>
+          <span class="stat-kicker">Portal access</span>
+          <strong class="stat-number stat-word">Use your real account</strong>
+          <span class="stat-caption">Sign in with the email and password you created when you registered.</span>
         </div>
       </div>
     </section>
@@ -50,7 +50,7 @@
       <div class="auth-card" id="student-login-card">
         <h2>Student Login</h2>
         <p class="section-sub portal-sub">
-          Sign in with your email and access code to view your learning dashboard.
+          Sign in with the email and password from your Hablawithflow registration.
         </p>
 
         <div class="form-group">
@@ -59,8 +59,8 @@
         </div>
 
         <div class="form-group">
-          <label for="student-code">Access Code</label>
-          <input type="password" id="student-code" placeholder="Enter your student code">
+          <label for="student-password">Password</label>
+          <input type="password" id="student-password" placeholder="Enter your password">
         </div>
 
         <button class="btn-submit" id="student-login" type="button">Open My Dashboard</button>
@@ -266,6 +266,8 @@
     <div class="footer-bottom">&copy; 2026 Hablawithflow. All rights reserved.</div>
   </footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/js/supabase-client.js"></script>
   <script src="assets/js/portal-data.js"></script>
   <script src="assets/js/student-portal.js"></script>
 </body>

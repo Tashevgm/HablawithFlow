@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Performance | Hablawithflow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html" class="nav-logo">Hablawithflow</a>
+      <div class="nav-links">
+        <a href="index.html#about">About</a>
+        <a href="index.html#plans">Lessons</a>
+        <a href="index.html#testimonials">Testimonials</a>
+        <a href="student-portal.html">Student Portal</a>
+        <a href="register.html">Register</a>
+        <a href="index.html#booking" class="btn-nav">Book Now</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="site-main portal-main">
+    <section class="portal-hero">
+      <div>
+        <p class="hero-badge">Teacher Students</p>
+        <h1>Review student performance and update learning progress.</h1>
+        <p class="hero-copy">
+          Keep roster, lesson progress, coaching notes, and milestones on a dedicated page so the
+          teacher workflow is easier to scan.
+        </p>
+      </div>
+      <div class="portal-hero-card">
+        <div class="stat-stack">
+          <span class="stat-kicker">Teacher access</span>
+          <strong class="stat-number">vlad-admin</strong>
+          <span class="stat-caption">Use the same private teacher code here as on the calendar page.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="teacher-page-nav" aria-label="Teacher sections">
+      <a href="admin.html" class="teacher-page-link">Calendar</a>
+      <a href="teacher-students.html" class="teacher-page-link active">Students</a>
+      <button class="teacher-page-link teacher-logout" id="teacher-logout" type="button">Log Out</button>
+    </section>
+
+    <section class="portal-shell">
+      <div class="auth-card" id="admin-login-card">
+        <h2>Teacher Login</h2>
+        <p class="section-sub portal-sub">
+          Enter your teacher access code to open the student performance dashboard.
+        </p>
+        <div class="form-group">
+          <label for="admin-code">Access Code</label>
+          <input type="password" id="admin-code" placeholder="Enter your teacher code">
+        </div>
+        <button class="btn-submit" id="admin-login" type="button">Open Dashboard</button>
+        <div class="form-error" id="admin-error" hidden></div>
+      </div>
+
+      <div id="admin-dashboard" hidden>
+        <section class="portal-grid portal-grid-top">
+          <article class="dashboard-card stat-card">
+            <span class="stat-kicker">Active students</span>
+            <strong class="stat-number" id="stat-students">0</strong>
+            <span class="stat-caption">Learners currently tracked in the portal</span>
+          </article>
+          <article class="dashboard-card stat-card">
+            <span class="stat-kicker">Average completion</span>
+            <strong class="stat-number" id="stat-average-progress">0%</strong>
+            <span class="stat-caption">Average completion across current student plans</span>
+          </article>
+          <article class="dashboard-card stat-card">
+            <span class="stat-kicker">Upcoming lessons</span>
+            <strong class="stat-number" id="stat-student-upcoming">0</strong>
+            <span class="stat-caption">Confirmed sessions attached to student profiles</span>
+          </article>
+        </section>
+
+        <section class="portal-grid portal-grid-wide">
+          <div class="portal-column-stack">
+            <article class="dashboard-card">
+              <div class="card-heading">
+                <div>
+                  <h2>Student Roster Snapshot</h2>
+                  <p class="portal-sub">Quick overview of progress across your active learners.</p>
+                </div>
+              </div>
+              <div class="stack-list" id="student-roster"></div>
+            </article>
+
+            <article class="dashboard-card">
+              <div class="card-heading">
+                <div>
+                  <h2>Progress Notes</h2>
+                  <p class="portal-sub">A clean summary of what this page is for.</p>
+                </div>
+              </div>
+              <div class="stack-list">
+                <article class="list-card">
+                  <strong>Update milestones</strong>
+                  <p>Keep the next speaking goal visible for every student.</p>
+                </article>
+                <article class="list-card">
+                  <strong>Track consistency</strong>
+                  <p>Lesson counts and streaks stay separate from the calendar workflow.</p>
+                </article>
+                <article class="list-card">
+                  <strong>Write better coaching notes</strong>
+                  <p>Use the editor to save feedback students can then see inside their own portal.</p>
+                </article>
+              </div>
+            </article>
+          </div>
+
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2>Student Progress Editor</h2>
+                <p class="portal-sub">Update tracks, lesson counts, focus areas, and coaching notes.</p>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="student-select">Student</label>
+              <select id="student-select"></select>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="student-track">Track</label>
+                <input type="text" id="student-track">
+              </div>
+              <div class="form-group">
+                <label for="student-level">Level</label>
+                <input type="text" id="student-level">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="student-completed">Completed Lessons</label>
+                <input type="number" id="student-completed" min="0">
+              </div>
+              <div class="form-group">
+                <label for="student-total">Total Lessons</label>
+                <input type="number" id="student-total" min="1">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="student-streak">Current Streak</label>
+                <input type="number" id="student-streak" min="0">
+              </div>
+              <div class="form-group">
+                <label for="student-milestone">Next Milestone</label>
+                <input type="text" id="student-milestone">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="student-focus">Focus Areas</label>
+              <input type="text" id="student-focus" placeholder="Separate items with commas">
+            </div>
+
+            <div class="form-group">
+              <label for="student-note">Coach Note</label>
+              <textarea id="student-note" placeholder="Write the latest coaching note..."></textarea>
+            </div>
+
+            <button class="btn-submit" id="save-student" type="button">Save Student Progress</button>
+            <div id="student-save-message" class="booking-feedback" hidden></div>
+          </article>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">Hablawithflow</div>
+        <p class="footer-desc">Teaching Spanish through rhythm, connection, and real-world conversation.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Navigate</h4>
+        <a href="index.html">Public Site</a>
+        <a href="student-portal.html">Student Portal</a>
+      </div>
+      <div class="footer-col">
+        <h4>Portal</h4>
+        <a href="admin.html">Teacher Calendar</a>
+        <a href="teacher-students.html">Student Performance</a>
+      </div>
+    </div>
+    <div class="footer-bottom">&copy; 2026 Hablawithflow. All rights reserved.</div>
+  </footer>
+
+  <script src="assets/js/portal-data.js"></script>
+  <script src="assets/js/admin-portal.js"></script>
+</body>
+</html>

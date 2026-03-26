@@ -38,7 +38,7 @@
         <h1>Register for Hablawithflow and start your Spanish journey properly.</h1>
         <p class="hero-copy">
           Tell Vlad a bit about your goals, your level, and what kind of Spanish you want to build.
-          Once registered, you can book your first lesson and receive portal access.
+          Once registered, your student portal access is created right away and you can book your first lesson with the same email.
         </p>
       </div>
 
@@ -46,7 +46,7 @@
         <div class="stat-stack">
           <span class="stat-kicker">What happens next</span>
           <strong class="stat-number stat-word">Register</strong>
-          <span class="stat-caption">Share your details, get matched to the right lesson track, then book your first session.</span>
+          <span class="stat-caption">Share your details, create your login, then book your first session.</span>
         </div>
       </div>
     </section>
@@ -54,12 +54,12 @@
     <section class="portal-shell">
       <section class="portal-grid portal-grid-wide">
         <article class="dashboard-card">
-          <div class="card-heading">
-            <div>
-              <h2>Registration Form</h2>
-              <p class="portal-sub">A clean first step for new students before they move into the student portal.</p>
+            <div class="card-heading">
+              <div>
+                <h2>Registration Form</h2>
+              <p class="portal-sub">Register once, create your login, then start booking.</p>
+              </div>
             </div>
-          </div>
 
           <form id="register-form" class="booking-form">
             <div class="form-row">
@@ -70,6 +70,17 @@
               <div class="form-group">
                 <label for="reg-email">Email</label>
                 <input type="email" id="reg-email" placeholder="your@email.com">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="reg-password">Password</label>
+                <input type="password" id="reg-password" placeholder="Create a password">
+              </div>
+              <div class="form-group">
+                <label for="reg-password-confirm">Confirm Password</label>
+                <input type="password" id="reg-password-confirm" placeholder="Repeat your password">
               </div>
             </div>
 
@@ -167,7 +178,7 @@
               </article>
               <article class="list-card">
                 <strong>Portal access next</strong>
-                <p>Registered students can then move into the student dashboard for progress tracking.</p>
+                <p>Your dashboard access is created immediately, so you can log in and book with the same email.</p>
               </article>
             </div>
           </article>
@@ -176,7 +187,7 @@
             <div class="card-heading">
               <div>
                 <h2>Already Registered?</h2>
-                <p class="portal-sub">Use the student portal if you already have access details.</p>
+                <p class="portal-sub">Use the student portal if you already created your account.</p>
               </div>
             </div>
             <div class="portal-shortcuts">
@@ -214,6 +225,10 @@
     <div class="footer-bottom">&copy; 2026 Hablawithflow. All rights reserved.</div>
   </footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/js/supabase-client.js"></script>
+  <script src="assets/js/email-api.js"></script>
+  <script src="assets/js/portal-data.js"></script>
   <script src="assets/js/register.js"></script>
 </body>
 </html>

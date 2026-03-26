@@ -2,11 +2,16 @@ const CALENDAR_START_HOUR = 8;
 const CALENDAR_END_HOUR = 20;
 const CALENDAR_STEP_MINUTES = 30;
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const TEACHER_SESSION_KEY = "hwf_teacher_session";
 
 let currentWeekStart = getStartOfWeek(new Date());
 let currentView = "week";
 let focusMonth = new Date();
 let focusedDate = "";
+
+function byId(id) {
+  return document.getElementById(id);
+}
 
 function getStartOfWeek(date) {
   const result = new Date(date);
@@ -100,6 +105,10 @@ function getBookings() {
   return window.HWFData.listBookings();
 }
 
+function getStudents() {
+  return window.HWFData.listStudents();
+}
+
 function getOpenSlot(date, time) {
   return getAvailability().find((slot) => slot.date === date && slot.time === time) || null;
 }
@@ -110,6 +119,18 @@ function getBooking(date, time) {
 
 function getOpenDates() {
   return [...new Set(getAvailability().map((slot) => slot.date))].sort();
+}
+
+function hasTeacherSession() {
+  return localStorage.getItem(TEACHER_SESSION_KEY) === "active";
+}
+
+function setTeacherSession(isActive) {
+  if (isActive) {
+    localStorage.setItem(TEACHER_SESSION_KEY, "active");
+  } else {
+    localStorage.removeItem(TEACHER_SESSION_KEY);
+  }
 }
 
 function ensureFocusedDate() {
@@ -125,16 +146,34 @@ function ensureFocusedDate() {
     focusedDate = openDates[0];
   }
 
-  focusMonth = new Date(toDateFromIso(focusedDate).getFullYear(), toDateFromIso(focusedDate).getMonth(), 1);
+  const date = toDateFromIso(focusedDate);
+  focusMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function showTeacherDashboard() {
+  const loginCard = byId("admin-login-card");
+  const dashboard = byId("admin-dashboard");
+
+  if (loginCard) {
+    loginCard.hidden = true;
+  }
+
+  if (dashboard) {
+    dashboard.hidden = false;
+  }
+
+  renderAdminDashboard();
 }
 
 function toggleSlot(date, time) {
-  const error = document.getElementById("slot-error");
+  const error = byId("slot-error");
   const booking = getBooking(date, time);
 
   if (booking) {
-    error.textContent = "That time is already booked.";
-    error.hidden = false;
+    if (error) {
+      error.textContent = "That time is already booked.";
+      error.hidden = false;
+    }
     return;
   }
 
@@ -142,30 +181,69 @@ function toggleSlot(date, time) {
 
   if (openSlot) {
     window.HWFData.removeAvailabilitySlot(openSlot.id);
-    error.hidden = true;
+    if (error) {
+      error.hidden = true;
+    }
     renderAdminDashboard();
     return;
   }
 
   const result = window.HWFData.addAvailabilitySlot({ date, time });
   if (!result.ok) {
-    error.textContent = result.error;
-    error.hidden = false;
+    if (error) {
+      error.textContent = result.error;
+      error.hidden = false;
+    }
     return;
   }
 
-  error.hidden = true;
+  if (error) {
+    error.hidden = true;
+  }
   renderAdminDashboard();
 }
 
 function renderAdminStats() {
-  document.getElementById("stat-open-slots").textContent = getAvailability().length;
-  document.getElementById("stat-bookings").textContent = getBookings().length;
-  document.getElementById("stat-students").textContent = window.HWFData.listStudents().length;
+  const students = getStudents();
+  const averageProgress = students.length
+    ? Math.round(
+        students.reduce((sum, student) => {
+          const total = Math.max(Number(student.totalLessons) || 0, 1);
+          return sum + Math.round(((Number(student.completedLessons) || 0) / total) * 100);
+        }, 0) / students.length
+      )
+    : 0;
+  const upcomingCount = students.reduce((sum, student) => sum + student.upcomingLessons.length, 0);
+
+  if (byId("stat-open-slots")) {
+    byId("stat-open-slots").textContent = getAvailability().length;
+  }
+
+  if (byId("stat-bookings")) {
+    byId("stat-bookings").textContent = getBookings().length;
+  }
+
+  if (byId("stat-students")) {
+    byId("stat-students").textContent = students.length;
+  }
+
+  if (byId("stat-average-progress")) {
+    byId("stat-average-progress").textContent = `${averageProgress}%`;
+  }
+
+  if (byId("stat-student-upcoming")) {
+    byId("stat-student-upcoming").textContent = upcomingCount;
+  }
 }
 
 function renderViewSwitcher() {
-  document.querySelectorAll(".view-switch-btn").forEach((button) => {
+  const buttons = document.querySelectorAll(".view-switch-btn");
+
+  if (!buttons.length) {
+    return;
+  }
+
+  buttons.forEach((button) => {
     const isActive = button.dataset.view === currentView;
     button.classList.toggle("active", isActive);
     button.setAttribute("aria-selected", String(isActive));
@@ -179,8 +257,13 @@ function renderViewSwitcher() {
 }
 
 function renderWeekCalendar() {
-  const calendar = document.getElementById("availability-calendar");
-  const range = document.getElementById("calendar-range");
+  const calendar = byId("availability-calendar");
+  const range = byId("calendar-range");
+
+  if (!calendar || !range) {
+    return;
+  }
+
   const timeSlots = getTimeSlots();
   const weekDays = Array.from({ length: 7 }, (_, index) => addDays(currentWeekStart, index));
 
@@ -254,10 +337,15 @@ function renderWeekCalendar() {
 }
 
 function renderFocusDateGrid() {
+  const grid = byId("focus-date-grid");
+  const label = byId("focus-month-label");
+
+  if (!grid || !label) {
+    return;
+  }
+
   ensureFocusedDate();
 
-  const grid = document.getElementById("focus-date-grid");
-  const label = document.getElementById("focus-month-label");
   const openDates = new Set(getOpenDates());
   const bookedDates = new Set(getBookings().map((booking) => booking.date));
   const year = focusMonth.getFullYear();
@@ -316,8 +404,13 @@ function renderFocusDateGrid() {
 }
 
 function renderFocusHoursGrid() {
-  const grid = document.getElementById("focus-hours-grid");
-  const caption = document.getElementById("focus-date-caption");
+  const grid = byId("focus-hours-grid");
+  const caption = byId("focus-date-caption");
+
+  if (!grid || !caption) {
+    return;
+  }
+
   const timeSlots = getTimeSlots();
 
   caption.textContent = `Manage hours for ${formatLongDate(focusedDate)}.`;
@@ -362,21 +455,33 @@ function renderFocusHoursGrid() {
 }
 
 function renderBulkDefaults() {
+  const dateFrom = byId("bulk-date-from");
+  const dateTo = byId("bulk-date-to");
+
+  if (!dateFrom || !dateTo) {
+    return;
+  }
+
   const today = new Date();
   const startDate = toIsoDate(today);
   const endDate = toIsoDate(addDays(today, 27));
 
-  if (!document.getElementById("bulk-date-from").value) {
-    document.getElementById("bulk-date-from").value = startDate;
+  if (!dateFrom.value) {
+    dateFrom.value = startDate;
   }
 
-  if (!document.getElementById("bulk-date-to").value) {
-    document.getElementById("bulk-date-to").value = endDate;
+  if (!dateTo.value) {
+    dateTo.value = endDate;
   }
 }
 
 function renderBookings() {
-  const container = document.getElementById("booking-list");
+  const container = byId("booking-list");
+
+  if (!container) {
+    return;
+  }
+
   const bookings = getBookings();
 
   if (!bookings.length) {
@@ -402,9 +507,14 @@ function renderBookings() {
 }
 
 function renderStudentSelect() {
-  const select = document.getElementById("student-select");
+  const select = byId("student-select");
+
+  if (!select) {
+    return;
+  }
+
   const selectedId = select.value;
-  const students = window.HWFData.listStudents();
+  const students = getStudents();
 
   select.innerHTML = students
     .map((student) => `<option value="${student.id}">${student.name}</option>`)
@@ -416,28 +526,42 @@ function renderStudentSelect() {
 }
 
 function loadStudentIntoForm(studentId) {
+  if (!byId("student-track")) {
+    return;
+  }
+
   const student = window.HWFData.getStudentById(studentId);
   if (!student) {
     return;
   }
 
-  document.getElementById("student-track").value = student.track;
-  document.getElementById("student-level").value = student.level;
-  document.getElementById("student-completed").value = student.completedLessons;
-  document.getElementById("student-total").value = student.totalLessons;
-  document.getElementById("student-streak").value = student.streak;
-  document.getElementById("student-milestone").value = student.nextMilestone;
-  document.getElementById("student-focus").value = student.focusAreas.join(", ");
-  document.getElementById("student-note").value = student.coachNote;
+  byId("student-track").value = student.track;
+  byId("student-level").value = student.level;
+  byId("student-completed").value = student.completedLessons;
+  byId("student-total").value = student.totalLessons;
+  byId("student-streak").value = student.streak;
+  byId("student-milestone").value = student.nextMilestone;
+  byId("student-focus").value = student.focusAreas.join(", ");
+  byId("student-note").value = student.coachNote;
 }
 
 function renderRoster() {
-  const container = document.getElementById("student-roster");
-  const students = window.HWFData.listStudents();
+  const container = byId("student-roster");
+
+  if (!container) {
+    return;
+  }
+
+  const students = getStudents();
+
+  if (!students.length) {
+    container.innerHTML = '<p class="empty-copy">No students are registered yet.</p>';
+    return;
+  }
 
   container.innerHTML = students
     .map((student) => {
-      const percent = Math.round((student.completedLessons / student.totalLessons) * 100);
+      const percent = Math.round((student.completedLessons / Math.max(student.totalLessons, 1)) * 100);
       return `
         <article class="list-card">
           <div class="list-card-top">
@@ -461,9 +585,9 @@ function renderRoster() {
 }
 
 function renderAdminDashboard() {
-  const students = window.HWFData.listStudents();
-  const select = document.getElementById("student-select");
-  const currentStudentId = students.length ? (select.value || students[0].id) : "";
+  const students = getStudents();
+  const select = byId("student-select");
+  const currentStudentId = select && students.length ? (select.value || students[0].id) : "";
 
   ensureFocusedDate();
   renderAdminStats();
@@ -474,19 +598,23 @@ function renderAdminDashboard() {
   renderBulkDefaults();
   renderBookings();
   renderStudentSelect();
+  renderRoster();
 
   if (currentStudentId) {
     loadStudentIntoForm(currentStudentId);
   }
-
-  renderRoster();
 }
 
 function bindTeacherAuth() {
-  const button = document.getElementById("admin-login");
+  const button = byId("admin-login");
+
+  if (!button) {
+    return;
+  }
+
   button.addEventListener("click", () => {
-    const code = document.getElementById("admin-code").value.trim();
-    const error = document.getElementById("admin-error");
+    const code = byId("admin-code").value.trim();
+    const error = byId("admin-error");
 
     if (code !== window.HWFData.getTeacherAccessCode()) {
       error.textContent = "Incorrect access code.";
@@ -495,36 +623,45 @@ function bindTeacherAuth() {
     }
 
     error.hidden = true;
-    document.getElementById("admin-login-card").hidden = true;
-    document.getElementById("admin-dashboard").hidden = false;
-    renderAdminDashboard();
+    setTeacherSession(true);
+    showTeacherDashboard();
   });
 }
 
 function bindCalendarControls() {
-  document.getElementById("calendar-prev").addEventListener("click", () => {
+  if (!byId("calendar-prev")) {
+    return;
+  }
+
+  byId("calendar-prev").addEventListener("click", () => {
     currentWeekStart = addDays(currentWeekStart, -7);
     renderWeekCalendar();
   });
 
-  document.getElementById("calendar-next").addEventListener("click", () => {
+  byId("calendar-next").addEventListener("click", () => {
     currentWeekStart = addDays(currentWeekStart, 7);
     renderWeekCalendar();
   });
 
-  document.getElementById("focus-prev").addEventListener("click", () => {
+  byId("focus-prev").addEventListener("click", () => {
     focusMonth = shiftMonth(focusMonth, -1);
     renderFocusDateGrid();
   });
 
-  document.getElementById("focus-next").addEventListener("click", () => {
+  byId("focus-next").addEventListener("click", () => {
     focusMonth = shiftMonth(focusMonth, 1);
     renderFocusDateGrid();
   });
 }
 
 function bindViewSwitcher() {
-  document.querySelectorAll(".view-switch-btn").forEach((button) => {
+  const buttons = document.querySelectorAll(".view-switch-btn");
+
+  if (!buttons.length) {
+    return;
+  }
+
+  buttons.forEach((button) => {
     button.addEventListener("click", () => {
       currentView = button.dataset.view;
       renderViewSwitcher();
@@ -533,10 +670,10 @@ function bindViewSwitcher() {
 }
 
 function buildBulkSlots() {
-  const dateFrom = document.getElementById("bulk-date-from").value;
-  const dateTo = document.getElementById("bulk-date-to").value;
-  const startTime = document.getElementById("bulk-time-start").value;
-  const endTime = document.getElementById("bulk-time-end").value;
+  const dateFrom = byId("bulk-date-from").value;
+  const dateTo = byId("bulk-date-to").value;
+  const startTime = byId("bulk-time-start").value;
+  const endTime = byId("bulk-time-end").value;
   const selectedWeekdays = [...document.querySelectorAll("#bulk-weekday-row input:checked")].map((input) => Number(input.value));
 
   if (!dateFrom || !dateTo || !startTime || !endTime) {
@@ -577,16 +714,20 @@ function buildBulkSlots() {
 }
 
 function bindBulkControls() {
-  document.getElementById("bulk-preset-weekdays").addEventListener("click", () => {
-    document.getElementById("bulk-time-start").value = "08:00";
-    document.getElementById("bulk-time-end").value = "17:00";
+  if (!byId("bulk-preset-weekdays")) {
+    return;
+  }
+
+  byId("bulk-preset-weekdays").addEventListener("click", () => {
+    byId("bulk-time-start").value = "08:00";
+    byId("bulk-time-end").value = "17:00";
     document.querySelectorAll("#bulk-weekday-row input").forEach((input) => {
       input.checked = ["1", "2", "3", "4", "5"].includes(input.value);
     });
   });
 
-  document.getElementById("bulk-add").addEventListener("click", () => {
-    const error = document.getElementById("slot-error");
+  byId("bulk-add").addEventListener("click", () => {
+    const error = byId("slot-error");
     const result = buildBulkSlots();
 
     if (!result.ok) {
@@ -610,23 +751,27 @@ function bindBulkControls() {
 }
 
 function bindStudentEditor() {
-  document.getElementById("student-select").addEventListener("change", (event) => {
+  if (!byId("student-select")) {
+    return;
+  }
+
+  byId("student-select").addEventListener("change", (event) => {
     loadStudentIntoForm(event.target.value);
   });
 
-  document.getElementById("save-student").addEventListener("click", () => {
-    const result = window.HWFData.updateStudentProgress(document.getElementById("student-select").value, {
-      track: document.getElementById("student-track").value.trim(),
-      level: document.getElementById("student-level").value.trim(),
-      completedLessons: document.getElementById("student-completed").value,
-      totalLessons: document.getElementById("student-total").value,
-      streak: document.getElementById("student-streak").value,
-      nextMilestone: document.getElementById("student-milestone").value.trim(),
-      focusAreas: document.getElementById("student-focus").value,
-      coachNote: document.getElementById("student-note").value.trim()
+  byId("save-student").addEventListener("click", () => {
+    const result = window.HWFData.updateStudentProgress(byId("student-select").value, {
+      track: byId("student-track").value.trim(),
+      level: byId("student-level").value.trim(),
+      completedLessons: byId("student-completed").value,
+      totalLessons: byId("student-total").value,
+      streak: byId("student-streak").value,
+      nextMilestone: byId("student-milestone").value.trim(),
+      focusAreas: byId("student-focus").value,
+      coachNote: byId("student-note").value.trim()
     });
 
-    const message = document.getElementById("student-save-message");
+    const message = byId("student-save-message");
     message.hidden = false;
 
     if (!result.ok) {
@@ -641,6 +786,19 @@ function bindStudentEditor() {
   });
 }
 
+function bindTeacherLogout() {
+  const button = byId("teacher-logout");
+
+  if (!button) {
+    return;
+  }
+
+  button.addEventListener("click", () => {
+    setTeacherSession(false);
+    window.location.reload();
+  });
+}
+
 function initAdminPortal() {
   window.HWFData.ensurePortalState();
   bindTeacherAuth();
@@ -648,6 +806,11 @@ function initAdminPortal() {
   bindViewSwitcher();
   bindBulkControls();
   bindStudentEditor();
+  bindTeacherLogout();
+
+  if (hasTeacherSession()) {
+    showTeacherDashboard();
+  }
 }
 
 initAdminPortal();

@@ -242,7 +242,7 @@ function updateBookingSelectionUI() {
   }
 
   trigger.disabled = false;
-  trigger.textContent = "Open availability calendar";
+  trigger.textContent = "Pick a slot";
 
   if (!selectedBookingDate || !selectedBookingTime) {
     selection.textContent = "Choose a highlighted date and time from the availability calendar.";
@@ -423,7 +423,7 @@ function bindBookingForm() {
   updateBookingSelectionUI();
   bindBookingModal();
 
-  bookingForm.addEventListener("submit", (event) => {
+  bookingForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     const studentName = document.getElementById("booking-name").value.trim();
@@ -464,12 +464,26 @@ function bindBookingForm() {
     renderBookingMonth();
     renderBookingTimes();
 
-    const registrationMessage = result.registration.created
-      ? ` You have also been registered automatically. Student portal access code: ${result.student.accessCode}.`
-      : ` Your student portal access code is ${result.student.accessCode}.`;
+    let emailMessage = "";
+
+    try {
+      await window.HWFEmailApi.sendBookingEmail({
+        studentName,
+        email,
+        date: result.booking.date,
+        time: result.booking.time,
+        lessonType,
+        message
+      });
+      emailMessage = " A confirmation email has been sent.";
+    } catch {
+      emailMessage = " The booking saved, but the confirmation email could not be sent yet.";
+    }
 
     setBookingFeedback(
-      `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}.${registrationMessage}`,
+      result.registration.created
+        ? `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. To use the student portal, register with the same email and create your password.${emailMessage}`
+        : `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. If you already registered, you can manage your lessons from the student portal.${emailMessage}`,
       "success"
     );
   });
