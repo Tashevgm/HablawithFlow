@@ -1,6 +1,21 @@
-const EMAIL_API_BASE = "http://127.0.0.1:8787";
+const isLocalOrigin =
+  window.location.origin.includes("127.0.0.1:5500") ||
+  window.location.origin.includes("localhost:5500") ||
+  window.location.origin.includes("127.0.0.1:8787") ||
+  window.location.origin.includes("localhost:8787");
+
+const configuredApiBase =
+  window.HWF_APP_CONFIG && typeof window.HWF_APP_CONFIG.apiBase === "string"
+    ? window.HWF_APP_CONFIG.apiBase.trim()
+    : "";
+
+const EMAIL_API_BASE = configuredApiBase || (isLocalOrigin ? "http://127.0.0.1:8787" : "");
 
 async function sendEmailRequest(path, payload) {
+  if (!EMAIL_API_BASE) {
+    throw new Error("Email backend is not configured for this site yet.");
+  }
+
   const response = await fetch(`${EMAIL_API_BASE}${path}`, {
     method: "POST",
     headers: {

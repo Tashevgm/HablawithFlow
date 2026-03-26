@@ -1,10 +1,12 @@
 require("dotenv").config();
 
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const { Resend } = require("resend");
 
 const app = express();
+const projectRoot = __dirname;
 const port = Number(process.env.PORT || 8787);
 const resendApiKey = process.env.RESEND_API_KEY;
 const emailFrom = process.env.EMAIL_FROM || "Hablawithflow <onboarding@resend.dev>";
@@ -59,9 +61,9 @@ function bookingHtml({ studentName, date, time, lessonType, message }) {
 function registrationHtml({ name, email, track, goal, timezone }) {
   return `
     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1a1a1a">
-      <h2 style="margin-bottom:8px">Welcome to Hablawithflow</h2>
+      <h2 style="margin-bottom:8px">Your registration is confirmed</h2>
       <p>Hi ${name},</p>
-      <p>Your registration has been received successfully.</p>
+      <p>Your Hablawithflow registration has been confirmed successfully.</p>
       <ul>
         <li><strong>Email:</strong> ${email}</li>
         <li><strong>Track:</strong> ${track}</li>
@@ -69,19 +71,21 @@ function registrationHtml({ name, email, track, goal, timezone }) {
         <li><strong>Timezone:</strong> ${timezone}</li>
       </ul>
       <p>You can now sign in to the student portal using the email and password you created.</p>
+      <p>If you book a lesson, you will also receive a separate booking confirmation email.</p>
     </div>
   `;
 }
 
-app.get("/", (request, response) => {
+app.get("/api", (request, response) => {
   response.type("html").send(`
     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1a1a1a;padding:32px;max-width:760px">
-      <h1 style="margin-bottom:8px">Hablawithflow Email Server</h1>
-      <p>This is the backend email API. The website itself is running on <a href="http://127.0.0.1:5500/">http://127.0.0.1:5500/</a>.</p>
+      <h1 style="margin-bottom:8px">Hablawithflow App Backend</h1>
+      <p>This server now powers both the website and the email API.</p>
       <ul>
         <li><strong>Health:</strong> <a href="/api/health">/api/health</a></li>
         <li><strong>Registration email:</strong> <code>POST /api/email/register</code></li>
         <li><strong>Booking email:</strong> <code>POST /api/email/booking</code></li>
+        <li><strong>Website:</strong> <a href="/">/</a></li>
       </ul>
     </div>
   `);
@@ -90,7 +94,7 @@ app.get("/", (request, response) => {
 app.get("/api/health", (request, response) => {
   response.json({
     ok: true,
-    service: "hablawithflow-email-server"
+    service: "hablawithflow-app-backend"
   });
 });
 
@@ -111,7 +115,7 @@ app.post("/api/email/register", async (request, response) => {
       resend.emails.send({
         from: emailFrom,
         to: email,
-        subject: "Welcome to Hablawithflow",
+        subject: "Your Hablawithflow registration is confirmed",
         html: registrationHtml({
           name,
           email,
@@ -209,6 +213,12 @@ app.post("/api/email/booking", async (request, response) => {
   }
 });
 
+app.use(express.static(projectRoot));
+
+app.get("/", (request, response) => {
+  response.sendFile(path.join(projectRoot, "index.html"));
+});
+
 app.listen(port, () => {
-  console.log(`Email server running at http://127.0.0.1:${port}`);
+  console.log(`App backend running at http://127.0.0.1:${port}`);
 });

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: hablawithflow-api
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: Hablawithflow <onboarding@resend.dev>
+      - key: OWNER_EMAIL
+        value: tashevgm@gmail.com

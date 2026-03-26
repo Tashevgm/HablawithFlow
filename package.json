@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "start": "node server.js",
     "start:email": "node server.js"
   },
   "dependencies": {
