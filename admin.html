@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Portal | Hablawithflow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html" class="nav-logo">Hablawithflow</a>
+      <div class="nav-links">
+        <a href="index.html#about">About</a>
+        <a href="index.html#plans">Lessons</a>
+        <a href="index.html#testimonials">Testimonials</a>
+        <a href="student-portal.html">Student Portal</a>
+        <a href="register.html">Register</a>
+        <a href="index.html#booking" class="btn-nav">Book Now</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="site-main portal-main">
+    <section class="portal-hero">
+      <div>
+        <p class="hero-badge">Teacher Control Center</p>
+        <h1>Manage your calendar, bookings, and student progress in one place.</h1>
+        <p class="hero-copy">
+          This portal keeps the same Hablawithflow look while giving you a working scheduling and
+          coaching dashboard.
+        </p>
+      </div>
+      <div class="portal-hero-card">
+        <div class="stat-stack">
+          <span class="stat-kicker">Demo access</span>
+          <strong class="stat-number">vlad-admin</strong>
+          <span class="stat-caption">Use this access code to open the teacher dashboard locally.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="portal-shell">
+      <div class="auth-card" id="admin-login-card">
+        <h2>Teacher Login</h2>
+        <p class="section-sub portal-sub">
+          Enter your teacher access code to manage availability and student progress.
+        </p>
+        <div class="form-group">
+          <label for="admin-code">Access Code</label>
+          <input type="password" id="admin-code" placeholder="Enter your teacher code">
+        </div>
+        <button class="btn-submit" id="admin-login" type="button">Open Dashboard</button>
+        <div class="form-error" id="admin-error" hidden></div>
+      </div>
+
+      <div id="admin-dashboard" hidden>
+        <section class="portal-grid portal-grid-top">
+          <article class="dashboard-card stat-card">
+            <span class="stat-kicker">Open slots</span>
+            <strong class="stat-number" id="stat-open-slots">0</strong>
+            <span class="stat-caption">Time slots students can currently book</span>
+          </article>
+          <article class="dashboard-card stat-card">
+            <span class="stat-kicker">Confirmed bookings</span>
+            <strong class="stat-number" id="stat-bookings">0</strong>
+            <span class="stat-caption">Upcoming sessions across all students</span>
+          </article>
+          <article class="dashboard-card stat-card">
+            <span class="stat-kicker">Active students</span>
+            <strong class="stat-number" id="stat-students">0</strong>
+            <span class="stat-caption">Learners currently tracked in the portal</span>
+          </article>
+        </section>
+
+        <section class="portal-grid portal-grid-full">
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2>Availability Calendar</h2>
+                <p class="portal-sub">Switch between a weekly planner, a focused date editor, and bulk recurring hours.</p>
+              </div>
+            </div>
+
+            <div class="view-switcher" role="tablist" aria-label="Calendar layouts">
+              <button class="view-switch-btn active" id="view-week" type="button" data-view="week">Week Grid</button>
+              <button class="view-switch-btn" id="view-date" type="button" data-view="date">Date Focus</button>
+              <button class="view-switch-btn" id="view-bulk" type="button" data-view="bulk">Bulk Hours</button>
+            </div>
+
+            <div class="calendar-legend">
+              <span><i class="legend-dot open"></i> Open to book</span>
+              <span><i class="legend-dot booked"></i> Already booked</span>
+              <span><i class="legend-dot empty"></i> Unavailable</span>
+            </div>
+
+            <div class="calendar-view active" id="calendar-view-week">
+              <div class="calendar-toolbar">
+                <button class="btn-outline calendar-nav" id="calendar-prev" type="button">Previous Week</button>
+                <div class="calendar-range" id="calendar-range"></div>
+                <button class="btn-outline calendar-nav" id="calendar-next" type="button">Next Week</button>
+              </div>
+
+              <div class="calendar-shell">
+                <div class="calendar-grid" id="availability-calendar"></div>
+              </div>
+            </div>
+
+            <div class="calendar-view" id="calendar-view-date" hidden>
+              <div class="focus-layout">
+                <div class="focus-calendar-card">
+                  <div class="calendar-toolbar">
+                    <button class="btn-outline calendar-nav" id="focus-prev" type="button">Previous Month</button>
+                    <div class="calendar-range" id="focus-month-label"></div>
+                    <button class="btn-outline calendar-nav" id="focus-next" type="button">Next Month</button>
+                  </div>
+                  <div class="focus-date-grid" id="focus-date-grid"></div>
+                </div>
+
+                <div class="focus-hours-card">
+                  <div class="card-heading">
+                    <div>
+                      <h3>Hours For Selected Date</h3>
+                      <p class="portal-sub" id="focus-date-caption">Choose a date to manage open lesson times.</p>
+                    </div>
+                  </div>
+                  <div class="focus-hours-grid" id="focus-hours-grid"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="calendar-view" id="calendar-view-bulk" hidden>
+              <div class="bulk-layout">
+                <div class="bulk-grid">
+                  <div class="form-group">
+                    <label for="bulk-date-from">From Date</label>
+                    <input type="date" id="bulk-date-from">
+                  </div>
+                  <div class="form-group">
+                    <label for="bulk-date-to">To Date</label>
+                    <input type="date" id="bulk-date-to">
+                  </div>
+                  <div class="form-group">
+                    <label for="bulk-time-start">Start Time</label>
+                    <input type="time" id="bulk-time-start" value="08:00" step="1800">
+                  </div>
+                  <div class="form-group">
+                    <label for="bulk-time-end">End Time</label>
+                    <input type="time" id="bulk-time-end" value="17:00" step="1800">
+                  </div>
+                </div>
+
+                <div class="bulk-days">
+                  <span class="field-label">Repeat on</span>
+                  <div class="weekday-row" id="bulk-weekday-row">
+                    <label class="weekday-pill"><input type="checkbox" value="1" checked>Mon</label>
+                    <label class="weekday-pill"><input type="checkbox" value="2" checked>Tue</label>
+                    <label class="weekday-pill"><input type="checkbox" value="3" checked>Wed</label>
+                    <label class="weekday-pill"><input type="checkbox" value="4" checked>Thu</label>
+                    <label class="weekday-pill"><input type="checkbox" value="5" checked>Fri</label>
+                    <label class="weekday-pill"><input type="checkbox" value="6">Sat</label>
+                    <label class="weekday-pill"><input type="checkbox" value="0">Sun</label>
+                  </div>
+                </div>
+
+                <div class="bulk-actions">
+                  <button class="btn-outline" id="bulk-preset-weekdays" type="button">Mon-Fri 08:00-17:00</button>
+                  <button class="btn-submit bulk-submit" id="bulk-add" type="button">Add Bulk Availability</button>
+                </div>
+
+                <div class="bulk-summary">
+                  <p class="portal-sub">Use this for recurring patterns instead of clicking each slot manually.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-error" id="slot-error" hidden></div>
+          </article>
+        </section>
+
+        <section class="portal-grid portal-grid-wide">
+          <div class="portal-column-stack">
+            <article class="dashboard-card">
+              <div class="card-heading">
+                <div>
+                  <h2>Upcoming Bookings</h2>
+                  <p class="portal-sub">Confirmed lessons created from the booking flow.</p>
+                </div>
+              </div>
+              <div class="stack-list" id="booking-list"></div>
+            </article>
+
+            <article class="dashboard-card">
+              <div class="card-heading">
+                <div>
+                  <h2>Student Roster Snapshot</h2>
+                  <p class="portal-sub">Quick overview of progress across your active learners.</p>
+                </div>
+              </div>
+              <div class="stack-list" id="student-roster"></div>
+            </article>
+          </div>
+
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2>Student Progress Editor</h2>
+                <p class="portal-sub">Update tracks, lesson counts, focus areas, and coaching notes.</p>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="student-select">Student</label>
+              <select id="student-select"></select>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="student-track">Track</label>
+                <input type="text" id="student-track">
+              </div>
+              <div class="form-group">
+                <label for="student-level">Level</label>
+                <input type="text" id="student-level">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="student-completed">Completed Lessons</label>
+                <input type="number" id="student-completed" min="0">
+              </div>
+              <div class="form-group">
+                <label for="student-total">Total Lessons</label>
+                <input type="number" id="student-total" min="1">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="student-streak">Current Streak</label>
+                <input type="number" id="student-streak" min="0">
+              </div>
+              <div class="form-group">
+                <label for="student-milestone">Next Milestone</label>
+                <input type="text" id="student-milestone">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="student-focus">Focus Areas</label>
+              <input type="text" id="student-focus" placeholder="Separate items with commas">
+            </div>
+
+            <div class="form-group">
+              <label for="student-note">Coach Note</label>
+              <textarea id="student-note" placeholder="Write the latest coaching note..."></textarea>
+            </div>
+
+            <button class="btn-submit" id="save-student" type="button">Save Student Progress</button>
+            <div id="student-save-message" class="booking-feedback" hidden></div>
+          </article>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">Hablawithflow</div>
+        <p class="footer-desc">Teaching Spanish through rhythm, connection, and real-world conversation.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Navigate</h4>
+        <a href="index.html">Public Site</a>
+        <a href="student-portal.html">Student Portal</a>
+      </div>
+      <div class="footer-col">
+        <h4>Portal</h4>
+        <a href="admin.html">Teacher Dashboard</a>
+      </div>
+    </div>
+    <div class="footer-bottom">&copy; 2026 Hablawithflow. All rights reserved.</div>
+  </footer>
+
+  <script src="assets/js/portal-data.js"></script>
+  <script src="assets/js/admin-portal.js"></script>
+</body>
+</html>

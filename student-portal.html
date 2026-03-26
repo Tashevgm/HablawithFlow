@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Portal | Hablawithflow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html" class="nav-logo">Hablawithflow</a>
+      <div class="nav-links">
+        <a href="index.html#about">About</a>
+        <a href="index.html#plans">Lessons</a>
+        <a href="index.html#testimonials">Testimonials</a>
+        <a href="student-portal.html">Student Portal</a>
+        <a href="register.html">Register</a>
+        <a href="index.html#booking" class="btn-nav">Book Now</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="site-main portal-main">
+    <section class="portal-hero">
+      <div>
+        <p class="hero-badge">Student Dashboard</p>
+        <h1>See your progress, upcoming lessons, and coaching notes in one place.</h1>
+        <p class="hero-copy">
+          The student portal keeps the same Hablawithflow feel while giving learners a simple place
+          to track their momentum.
+        </p>
+      </div>
+      <div class="portal-hero-card">
+        <div class="stat-stack">
+          <span class="stat-kicker">Demo student access</span>
+          <strong class="stat-number">maria@hablawithflow.com</strong>
+          <span class="stat-caption">Code: mariaflow</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="portal-shell">
+      <div class="auth-card" id="student-login-card">
+        <h2>Student Login</h2>
+        <p class="section-sub portal-sub">
+          Sign in with your email and access code to view your learning dashboard.
+        </p>
+
+        <div class="form-group">
+          <label for="student-email">Email</label>
+          <input type="email" id="student-email" placeholder="your@email.com">
+        </div>
+
+        <div class="form-group">
+          <label for="student-code">Access Code</label>
+          <input type="password" id="student-code" placeholder="Enter your student code">
+        </div>
+
+        <button class="btn-submit" id="student-login" type="button">Open My Dashboard</button>
+        <div class="form-error" id="student-error" hidden></div>
+      </div>
+
+      <div id="student-dashboard" hidden>
+        <section class="portal-grid portal-grid-top">
+          <article class="dashboard-card stat-card">
+            <span class="stat-kicker">Current track</span>
+            <strong class="stat-number stat-word" id="student-track-label">1-on-1</strong>
+            <span class="stat-caption" id="student-level-label">Level A2</span>
+          </article>
+          <article class="dashboard-card stat-card">
+            <span class="stat-kicker">Lessons completed</span>
+            <strong class="stat-number" id="student-progress-count">0</strong>
+            <span class="stat-caption" id="student-progress-caption">out of 0 planned lessons</span>
+          </article>
+          <article class="dashboard-card stat-card">
+            <span class="stat-kicker">Streak</span>
+            <strong class="stat-number" id="student-streak-label">0</strong>
+            <span class="stat-caption">consecutive study sessions</span>
+          </article>
+        </section>
+
+        <section class="portal-grid">
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2 id="student-name-heading">Welcome back</h2>
+                <p class="portal-sub">Your lesson momentum and next milestone.</p>
+              </div>
+              <div class="portal-shortcuts portal-shortcuts-tight">
+                <a href="index.html#booking" class="btn-outline portal-link" id="student-book-link">Book a Lesson</a>
+                <button class="btn-outline portal-link" id="student-logout" type="button">Log Out</button>
+              </div>
+            </div>
+
+            <div class="progress-wrap">
+              <div class="progress-copy">
+                <span>Progress</span>
+                <strong id="student-progress-percent">0%</strong>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" id="student-progress-bar"></div>
+              </div>
+            </div>
+
+            <div class="milestone-card">
+              <span class="stat-kicker">Next milestone</span>
+              <strong id="student-milestone"></strong>
+            </div>
+
+            <div>
+              <h3 class="portal-subheading">Focus areas</h3>
+              <div class="chip-row" id="student-focus"></div>
+            </div>
+          </article>
+
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2>Upcoming Lessons</h2>
+                <p class="portal-sub">Any confirmed sessions from the teacher calendar appear here.</p>
+              </div>
+            </div>
+            <div class="stack-list" id="student-upcoming"></div>
+          </article>
+        </section>
+
+        <section class="portal-grid portal-grid-wide">
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2>Coach Note</h2>
+                <p class="portal-sub">Your latest personalized guidance from Vlad.</p>
+              </div>
+            </div>
+            <p class="note-card" id="student-note"></p>
+          </article>
+
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2>Lesson History</h2>
+                <p class="portal-sub">A running list of completed sessions and topics.</p>
+              </div>
+            </div>
+            <div class="stack-list" id="student-history"></div>
+          </article>
+        </section>
+
+        <section class="portal-grid portal-grid-full" id="student-booking-section">
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2>Book Your Next Lesson</h2>
+                <p class="portal-sub">Choose your next available slot directly from your student profile.</p>
+              </div>
+            </div>
+
+            <div class="portal-booking-grid">
+              <div class="booking-calendar-card">
+                <div class="booking-calendar-toolbar">
+                  <button class="btn-outline calendar-nav" id="student-booking-prev" type="button">Previous</button>
+                  <div class="calendar-range" id="student-booking-month-label"></div>
+                  <button class="btn-outline calendar-nav" id="student-booking-next" type="button">Next</button>
+                </div>
+                <div class="booking-month-grid" id="student-booking-month-grid"></div>
+              </div>
+
+              <div class="booking-times-card">
+                <div class="card-heading">
+                  <div>
+                    <h3>Available Times</h3>
+                    <p class="portal-sub" id="student-booking-times-caption">Select a highlighted day to view times.</p>
+                  </div>
+                </div>
+                <div class="booking-time-list" id="student-booking-time-list"></div>
+
+                <div class="form-group booking-message-group">
+                  <label for="student-booking-message">Message for Vlad</label>
+                  <textarea
+                    id="student-booking-message"
+                    placeholder="Anything you want to focus on in the next lesson?"
+                  ></textarea>
+                </div>
+
+                <button class="btn-submit booking-confirm-btn" id="student-booking-confirm" type="button">
+                  Book Next Lesson
+                </button>
+                <div id="student-booking-feedback" class="booking-feedback" hidden></div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="portal-grid portal-grid-full">
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2>Your Review</h2>
+                <p class="portal-sub">Only signed-in students can submit or update a review.</p>
+              </div>
+            </div>
+
+            <div class="review-form review-form-portal" id="student-review-form">
+              <div class="star-label">Your rating *</div>
+              <div class="star-picker" id="student-star-picker" aria-label="Student star rating">
+                <button class="sp-star student-sp-star" type="button" data-val="1" aria-label="Rate 1 star">&#9733;</button>
+                <button class="sp-star student-sp-star" type="button" data-val="2" aria-label="Rate 2 stars">&#9733;</button>
+                <button class="sp-star student-sp-star" type="button" data-val="3" aria-label="Rate 3 stars">&#9733;</button>
+                <button class="sp-star student-sp-star" type="button" data-val="4" aria-label="Rate 4 stars">&#9733;</button>
+                <button class="sp-star student-sp-star" type="button" data-val="5" aria-label="Rate 5 stars">&#9733;</button>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="student-review-name">Student</label>
+                  <input type="text" id="student-review-name" readonly>
+                </div>
+                <div class="form-group">
+                  <label for="student-review-track">Track</label>
+                  <input type="text" id="student-review-track" readonly>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="student-review-role">Role / Occupation</label>
+                <input type="text" id="student-review-role" placeholder="e.g. Product Designer">
+              </div>
+
+              <div class="form-group">
+                <label for="student-review-text">Your Review *</label>
+                <textarea id="student-review-text" placeholder="Tell future students what working with Vlad has been like..."></textarea>
+              </div>
+
+              <button class="btn-submit" id="student-review-submit" type="button">Submit Review</button>
+              <div id="student-review-feedback" class="booking-feedback" hidden></div>
+            </div>
+          </article>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">Hablawithflow</div>
+        <p class="footer-desc">Teaching Spanish through rhythm, connection, and real-world conversation.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Navigate</h4>
+        <a href="index.html">Public Site</a>
+        <a href="admin.html">Teacher Portal</a>
+      </div>
+      <div class="footer-col">
+        <h4>Student Access</h4>
+        <a href="student-portal.html">Student Dashboard</a>
+      </div>
+    </div>
+    <div class="footer-bottom">&copy; 2026 Hablawithflow. All rights reserved.</div>
+  </footer>
+
+  <script src="assets/js/portal-data.js"></script>
+  <script src="assets/js/student-portal.js"></script>
+</body>
+</html>

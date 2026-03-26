@@ -24,6 +24,8 @@
         <a href="#about">About</a>
         <a href="#plans">Lessons</a>
         <a href="#testimonials">Testimonials</a>
+        <a href="student-portal.html">Student Portal</a>
+        <a href="register.html">Register</a>
         <a href="#booking" class="btn-nav">Book Now</a>
       </div>
     </nav>
@@ -39,8 +41,7 @@
           deals in Mexico City with natural fluency.
         </p>
         <div class="hero-btns">
-          <a href="#booking" class="btn-primary">Start Your Journey</a>
-          <a href="#plans" class="btn-outline">Explore Classes</a>
+          <a href="#booking" class="btn-primary btn-hero-wide">Start your Journey for Free</a>
         </div>
       </div>
 
@@ -105,36 +106,20 @@
       </p>
 
       <div class="plans-grid">
-        <article class="plan-card">
+        <article class="plan-card featured-teal">
           <div class="plan-icon" aria-hidden="true">1:1</div>
           <h3>1-on-1</h3>
           <p>Hyper-personalized sessions focused entirely on your pace and specific needs.</p>
-          <div class="plan-price">$45<span>/hr</span></div>
-          <a href="#booking" class="plan-btn">Select Plan</a>
-        </article>
-
-        <article class="plan-card featured-teal">
-          <div class="plan-icon" aria-hidden="true">Trip</div>
-          <h3>Travel Spanish</h3>
-          <p>Practical phrases, cultural nuance, and survival Spanish for your next trip.</p>
-          <div class="plan-price">$40<span>/hr</span></div>
+          <div class="plan-price">$20<span>/hr</span></div>
           <a href="#booking" class="plan-btn teal-btn solid">Select Plan</a>
         </article>
 
         <article class="plan-card featured-gold">
-          <div class="plan-icon" aria-hidden="true">Biz</div>
-          <h3>Business Spanish</h3>
-          <p>Professional vocabulary and etiquette for meetings, presentations, and calls.</p>
-          <div class="plan-price">$55<span>/hr</span></div>
-          <a href="#booking" class="plan-btn gold-btn">Select Plan</a>
-        </article>
-
-        <article class="plan-card">
           <div class="plan-icon" aria-hidden="true">Grp</div>
           <h3>Group Classes</h3>
           <p>Learn with peers in a social environment with a maximum of five students.</p>
-          <div class="plan-price">$25<span>/hr</span></div>
-          <a href="#booking" class="plan-btn">Select Plan</a>
+          <div class="plan-price">$15<span>/hr</span></div>
+          <a href="#booking" class="plan-btn gold-btn">Select Plan</a>
         </article>
       </div>
     </section>
@@ -142,102 +127,38 @@
     <section class="testimonials" id="testimonials" aria-labelledby="testimonials-title">
       <h2 id="testimonials-title" class="section-title">Student Stories</h2>
       <p class="section-sub">
-        Real results from real learners. Read reviews or share your own experience.
+        Real results from real learners. Reviews can only be submitted by active students inside the student portal.
       </p>
 
-      <div class="reviews-tabs" role="tablist" aria-label="Review tabs">
-        <button class="tab-btn active" type="button" data-tab="read" role="tab" aria-selected="true">
-          Read Reviews
-        </button>
-        <button class="tab-btn" type="button" data-tab="write" role="tab" aria-selected="false">
-          Leave a Review
-        </button>
-      </div>
-
-      <div class="tab-panel active" id="tab-read" role="tabpanel">
-        <div class="reviews-summary" id="reviews-summary">
-          <div class="summary-score">
-            <div class="big-num" id="avg-score">5.0</div>
-            <div class="big-stars" aria-label="Average rating: 5 out of 5">
-              <span class="star">&#9733;</span><span class="star">&#9733;</span><span class="star">&#9733;</span><span class="star">&#9733;</span><span class="star">&#9733;</span>
-            </div>
-            <div class="review-count" id="review-count">2 reviews</div>
+      <div class="reviews-summary" id="reviews-summary">
+        <div class="summary-score">
+          <div class="big-num" id="avg-score">5.0</div>
+          <div class="big-stars" aria-label="Average rating: 5 out of 5">
+            <span class="star">&#9733;</span><span class="star">&#9733;</span><span class="star">&#9733;</span><span class="star">&#9733;</span><span class="star">&#9733;</span>
           </div>
-          <div class="summary-divider" aria-hidden="true"></div>
-          <div class="summary-bars" id="summary-bars"></div>
+          <div class="review-count" id="review-count">2 reviews</div>
         </div>
-
-        <div class="testi-grid" id="reviews-grid"></div>
+        <div class="summary-divider" aria-hidden="true"></div>
+        <div class="summary-bars" id="summary-bars"></div>
       </div>
 
-      <div class="tab-panel" id="tab-write" role="tabpanel" hidden>
-        <div class="write-review-wrap">
-          <h3>Share your experience</h3>
-          <p class="sub">
-            Your review helps other students find the right Spanish flow for them.
-          </p>
-
-          <div class="review-form" id="review-form">
-            <div class="star-label">Your rating *</div>
-            <div class="star-picker" id="star-picker" aria-label="Star rating">
-              <button class="sp-star" type="button" data-val="1" aria-label="Rate 1 star">&#9733;</button>
-              <button class="sp-star" type="button" data-val="2" aria-label="Rate 2 stars">&#9733;</button>
-              <button class="sp-star" type="button" data-val="3" aria-label="Rate 3 stars">&#9733;</button>
-              <button class="sp-star" type="button" data-val="4" aria-label="Rate 4 stars">&#9733;</button>
-              <button class="sp-star" type="button" data-val="5" aria-label="Rate 5 stars">&#9733;</button>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="rv-name">Your Name *</label>
-                <input type="text" id="rv-name" placeholder="e.g. Maria G.">
-              </div>
-              <div class="form-group">
-                <label for="rv-role">Role / Occupation</label>
-                <input type="text" id="rv-role" placeholder="e.g. Software Engineer">
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="rv-lesson">Lesson Type</label>
-              <select id="rv-lesson">
-                <option value="">Select a lesson type</option>
-                <option>1-on-1</option>
-                <option>Travel Spanish</option>
-                <option>Business Spanish</option>
-                <option>Group Classes</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="rv-text">Your Review *</label>
-              <textarea id="rv-text" placeholder="Tell us about your experience with Vlad..."></textarea>
-            </div>
-
-            <button class="btn-submit" id="submit-review" type="button">Submit Review</button>
-            <div id="rv-error" class="form-error" hidden></div>
-          </div>
-
-          <div class="review-success" id="review-success" hidden>
-            <div class="success-icon" aria-hidden="true">Thanks</div>
-            <h4>Muchas gracias!</h4>
-            <p>Your review has been posted. It helps Vlad and future students.</p>
-            <button class="btn-primary btn-inline" id="read-reviews" type="button">Read All Reviews</button>
-          </div>
-        </div>
-      </div>
+      <div class="testi-grid" id="reviews-grid"></div>
     </section>
 
     <section class="booking" id="booking" aria-labelledby="booking-title">
       <div class="booking-wrap">
         <div class="booking-left">
-          <h2 id="booking-title">Ready to start?</h2>
-          <p>Book your first lesson and start speaking Spanish with flow.</p>
+          <h2 id="booking-title">Book your free lesson now.</h2>
+          <p>Choose a live availability slot and reserve a first session that fits your schedule.</p>
           <ul class="booking-perks">
             <li>Free placement test</li>
             <li>Flexible scheduling</li>
             <li>No long-term contracts</li>
           </ul>
+          <div class="portal-shortcuts">
+            <a href="student-portal.html" class="btn-outline portal-link">Student Portal</a>
+            <a href="admin.html" class="btn-outline portal-link">Teacher Portal</a>
+          </div>
         </div>
 
         <div class="booking-right">
@@ -255,18 +176,24 @@
 
             <div class="form-row">
               <div class="form-group">
-                <label for="booking-date">Preferred Date</label>
-                <input type="date" id="booking-date">
+                <label for="booking-calendar-trigger">Choose Your Slot</label>
+                <button class="calendar-trigger" id="booking-calendar-trigger" type="button">
+                  Pick a slot
+                </button>
+                <input type="hidden" id="booking-date">
+                <input type="hidden" id="booking-time">
               </div>
               <div class="form-group">
                 <label for="booking-lesson">Lesson Type</label>
                 <select id="booking-lesson">
                   <option>1-on-1</option>
-                  <option>Travel Spanish</option>
-                  <option>Business Spanish</option>
                   <option>Group Classes</option>
                 </select>
               </div>
+            </div>
+
+            <div id="booking-selection" class="booking-selection">
+              No lesson slot selected yet.
             </div>
 
             <div class="form-group">
@@ -275,11 +202,50 @@
             </div>
 
             <button class="btn-submit" type="submit">Send Booking Request</button>
+            <div id="booking-feedback" class="booking-feedback" hidden></div>
           </form>
         </div>
       </div>
     </section>
   </main>
+
+  <div class="booking-modal" id="booking-modal" hidden>
+    <div class="booking-modal-backdrop" id="booking-modal-backdrop"></div>
+    <div class="booking-modal-panel" role="dialog" aria-modal="true" aria-labelledby="booking-modal-title">
+      <div class="booking-modal-top">
+        <div>
+          <p class="hero-badge booking-badge">Live Availability</p>
+          <h3 id="booking-modal-title">Pick a time that works for you.</h3>
+          <p class="booking-modal-copy">Only open lesson times are shown here.</p>
+        </div>
+        <button class="booking-modal-close" id="booking-modal-close" type="button" aria-label="Close calendar">
+          Close
+        </button>
+      </div>
+
+      <div class="booking-modal-body">
+        <div class="booking-calendar-card">
+          <div class="booking-calendar-toolbar">
+            <button class="btn-outline calendar-nav" id="booking-month-prev" type="button">Previous</button>
+            <div class="calendar-range" id="booking-month-label"></div>
+            <button class="btn-outline calendar-nav" id="booking-month-next" type="button">Next</button>
+          </div>
+          <div class="booking-month-grid" id="booking-month-grid"></div>
+        </div>
+
+        <div class="booking-times-card">
+          <div class="card-heading">
+            <div>
+              <h3>Available Times</h3>
+              <p class="portal-sub" id="booking-times-caption">Select a highlighted day to view times.</p>
+            </div>
+          </div>
+          <div class="booking-time-list" id="booking-time-list"></div>
+          <button class="btn-submit booking-confirm-btn" id="booking-confirm-btn" type="button">Book Now</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <footer class="site-footer">
     <div class="footer-grid">
@@ -295,6 +261,8 @@
         <a href="#about">About Vlad</a>
         <a href="#plans">Pricing and Lessons</a>
         <a href="#testimonials">Success Stories</a>
+        <a href="student-portal.html">Student Portal</a>
+        <a href="admin.html">Teacher Portal</a>
       </div>
 
       <div class="footer-col">
@@ -307,6 +275,7 @@
     <div class="footer-bottom">&copy; 2026 Hablawithflow. All rights reserved.</div>
   </footer>
 
+  <script src="assets/js/portal-data.js"></script>
   <script src="assets/js/main.js"></script>
 </body>
 </html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta
+    name="description"
+    content="Register with Hablawithflow to start your Spanish learning journey."
+  >
+  <title>Register | Hablawithflow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html" class="nav-logo">Hablawithflow</a>
+      <div class="nav-links">
+        <a href="index.html#about">About</a>
+        <a href="index.html#plans">Lessons</a>
+        <a href="index.html#testimonials">Testimonials</a>
+        <a href="student-portal.html">Student Portal</a>
+        <a href="register.html">Register</a>
+        <a href="index.html#booking" class="btn-nav">Book Now</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="site-main portal-main">
+    <section class="portal-hero">
+      <div>
+        <p class="hero-badge">New Students</p>
+        <h1>Register for Hablawithflow and start your Spanish journey properly.</h1>
+        <p class="hero-copy">
+          Tell Vlad a bit about your goals, your level, and what kind of Spanish you want to build.
+          Once registered, you can book your first lesson and receive portal access.
+        </p>
+      </div>
+
+      <div class="portal-hero-card">
+        <div class="stat-stack">
+          <span class="stat-kicker">What happens next</span>
+          <strong class="stat-number stat-word">Register</strong>
+          <span class="stat-caption">Share your details, get matched to the right lesson track, then book your first session.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="portal-shell">
+      <section class="portal-grid portal-grid-wide">
+        <article class="dashboard-card">
+          <div class="card-heading">
+            <div>
+              <h2>Registration Form</h2>
+              <p class="portal-sub">A clean first step for new students before they move into the student portal.</p>
+            </div>
+          </div>
+
+          <form id="register-form" class="booking-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="reg-name">Full Name</label>
+                <input type="text" id="reg-name" placeholder="Your full name">
+              </div>
+              <div class="form-group">
+                <label for="reg-email">Email</label>
+                <input type="email" id="reg-email" placeholder="your@email.com">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="reg-level">Current Level</label>
+                <select id="reg-level">
+                  <option value="">Select your level</option>
+                  <option>Beginner</option>
+                  <option>A1</option>
+                  <option>A2</option>
+                  <option>B1</option>
+                  <option>B2+</option>
+                </select>
+                <div class="field-note">Don't know your level? Don't worry.</div>
+              </div>
+              <div class="form-group">
+                <label for="reg-track">Preferred Track</label>
+                <select id="reg-track">
+                  <option value="">Choose a lesson track</option>
+                  <option>1-on-1</option>
+                  <option>Group Classes</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="reg-timezone">Timezone</label>
+                <select id="reg-timezone">
+                  <option value="">Choose your timezone</option>
+                  <option value="Europe/London">London (GMT / BST)</option>
+                  <option value="Europe/Paris">Paris (CET / CEST)</option>
+                  <option value="Europe/Madrid">Madrid (CET / CEST)</option>
+                  <option value="Europe/Berlin">Berlin (CET / CEST)</option>
+                  <option value="America/New_York">New York (ET)</option>
+                  <option value="America/Chicago">Chicago (CT)</option>
+                  <option value="America/Denver">Denver (MT)</option>
+                  <option value="America/Los_Angeles">Los Angeles (PT)</option>
+                  <option value="America/Toronto">Toronto (ET)</option>
+                  <option value="America/Mexico_City">Mexico City (CT)</option>
+                  <option value="America/Sao_Paulo">Sao Paulo (BRT)</option>
+                  <option value="Asia/Dubai">Dubai (GST)</option>
+                  <option value="Asia/Kolkata">India (IST)</option>
+                  <option value="Asia/Singapore">Singapore (SGT)</option>
+                  <option value="Asia/Tokyo">Tokyo (JST)</option>
+                  <option value="Australia/Sydney">Sydney (AEST / AEDT)</option>
+                  <option value="Pacific/Auckland">Auckland (NZST / NZDT)</option>
+                  <option value="other">I am not sure yet</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="reg-goal">Main Goal</label>
+                <select id="reg-goal">
+                  <option value="">Choose your main goal</option>
+                  <option value="Travel">Travel confidently</option>
+                  <option value="Work">Speak Spanish for work</option>
+                  <option value="Conversation">Improve conversation fluency</option>
+                  <option value="Confidence">Build speaking confidence</option>
+                  <option value="Exams">Prepare for exams or school</option>
+                  <option value="Relocation">Move to a Spanish-speaking country</option>
+                  <option value="Family">Speak with family or a partner</option>
+                  <option value="Beginner">Build a strong beginner foundation</option>
+                  <option value="Not sure">I am not sure yet</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="reg-message">Tell Vlad About Your Goals</label>
+              <textarea id="reg-message" placeholder="What kind of Spanish do you want to speak confidently?"></textarea>
+            </div>
+
+            <button class="btn-submit" type="submit">Submit Registration</button>
+            <div id="register-feedback" class="booking-feedback" hidden></div>
+          </form>
+        </article>
+
+        <div class="portal-column-stack">
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2>Why Register First</h2>
+                <p class="portal-sub">This keeps your onboarding structured before lessons begin.</p>
+              </div>
+            </div>
+            <div class="stack-list">
+              <article class="list-card">
+                <strong>Get placed correctly</strong>
+                <p>Your level and goals help shape the right lesson track.</p>
+              </article>
+              <article class="list-card">
+                <strong>Book with context</strong>
+                <p>When you book, Vlad already knows what you want to focus on.</p>
+              </article>
+              <article class="list-card">
+                <strong>Portal access next</strong>
+                <p>Registered students can then move into the student dashboard for progress tracking.</p>
+              </article>
+            </div>
+          </article>
+
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2>Already Registered?</h2>
+                <p class="portal-sub">Use the student portal if you already have access details.</p>
+              </div>
+            </div>
+            <div class="portal-shortcuts">
+              <a href="student-portal.html" class="btn-outline portal-link portal-link-wide">Open Student Portal</a>
+            </div>
+          </article>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">Hablawithflow</div>
+        <p class="footer-desc">
+          Teaching Spanish through rhythm, connection, and real-world conversation.
+        </p>
+      </div>
+
+      <div class="footer-col">
+        <h4>Explore</h4>
+        <a href="index.html">Home</a>
+        <a href="register.html">Register</a>
+        <a href="student-portal.html">Student Portal</a>
+      </div>
+
+      <div class="footer-col">
+        <h4>Connect</h4>
+        <a href="mailto:hello@hablawithflow.com">Email</a>
+        <a href="index.html#booking">Book a Lesson</a>
+        <a href="admin.html">Teacher Portal</a>
+      </div>
+    </div>
+    <div class="footer-bottom">&copy; 2026 Hablawithflow. All rights reserved.</div>
+  </footer>
+
+  <script src="assets/js/register.js"></script>
+</body>
+</html>
