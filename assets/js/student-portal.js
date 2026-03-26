@@ -2,6 +2,7 @@ const STUDENT_REVIEW_STORAGE_KEY = "hwf_reviews";
 const STUDENT_BOOKING_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 let currentStudent = null;
+let currentSupabaseUserId = "";
 let selectedStudentRating = 0;
 let studentBookingMonth = null;
 let selectedStudentBookingDate = "";
@@ -120,12 +121,80 @@ async function openStudentDashboardFromSession() {
   }
 
   const profile = await loadSupabaseProfile(user);
+  currentSupabaseUserId = user.id;
   const student = window.HWFData.ensureStudentFromProfile(profile);
+  const hydratedStudent = await hydrateStudentFromServer(student);
 
   document.getElementById("student-error").hidden = true;
   document.getElementById("student-login-card").hidden = true;
   document.getElementById("student-dashboard").hidden = false;
-  renderStudentDashboard(student);
+  renderStudentDashboard(hydratedStudent);
+}
+
+async function listServerBookingsForCurrentStudent() {
+  if (!currentSupabaseUserId) {
+    return [];
+  }
+
+  const { data, error } = await window.supabaseClient
+    .from("bookings")
+    .select("*")
+    .eq("student_id", currentSupabaseUserId)
+    .order("lesson_date", { ascending: true })
+    .order("lesson_time", { ascending: true });
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data;
+}
+
+async function hydrateStudentFromServer(student) {
+  const serverBookings = await listServerBookingsForCurrentStudent();
+
+  if (!serverBookings.length) {
+    return student;
+  }
+
+  return {
+    ...student,
+    upcomingLessons: serverBookings
+      .filter((booking) => booking.status === "confirmed")
+      .map((booking) => ({
+        date: booking.lesson_date,
+        time: booking.lesson_time.slice(0, 5),
+        topic: booking.lesson_type
+      }))
+  };
+}
+
+async function saveServerBooking({ studentName, email, date, time, lessonType, message }) {
+  if (!currentSupabaseUserId) {
+    return { ok: false, error: "You must be signed in to save a booking." };
+  }
+
+  const { data, error } = await window.supabaseClient
+    .from("bookings")
+    .insert({
+      student_id: currentSupabaseUserId,
+      student_email: email,
+      student_name: studentName,
+      lesson_type: lessonType,
+      lesson_date: date,
+      lesson_time: time,
+      timezone: currentStudent && currentStudent.timezone ? currentStudent.timezone : "Europe/London",
+      message,
+      status: "confirmed"
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true, booking: data };
 }
 
 function setStudentStarPreview(rating) {
@@ -389,34 +458,57 @@ function bindStudentBookingSection() {
     renderStudentBookingCalendar();
   });
 
-  document.getElementById("student-booking-confirm").addEventListener("click", () => {
+  document.getElementById("student-booking-confirm").addEventListener("click", async () => {
     if (!currentStudent || !selectedStudentBookingDate || !selectedStudentBookingTime) {
       setStudentBookingFeedback("Please choose an available lesson slot first.", "error");
       return;
     }
 
-    const result = window.HWFData.createBooking({
+    const bookingPayload = {
       studentName: currentStudent.name,
       email: currentStudent.email,
       date: selectedStudentBookingDate,
       time: selectedStudentBookingTime,
       lessonType: currentStudent.track,
       message: document.getElementById("student-booking-message").value.trim()
-    });
+    };
+
+    const serverResult = await saveServerBooking(bookingPayload);
+    if (!serverResult.ok) {
+      setStudentBookingFeedback(serverResult.error, "error");
+      return;
+    }
+
+    const result = window.HWFData.createBooking(bookingPayload);
 
     if (!result.ok) {
+      await window.supabaseClient.from("bookings").delete().eq("id", serverResult.booking.id);
       setStudentBookingFeedback(result.error, "error");
       renderStudentBookingSection();
       return;
     }
 
+    try {
+      await window.HWFEmailApi.sendBookingEmail({
+        studentName: bookingPayload.studentName,
+        email: bookingPayload.email,
+        date: bookingPayload.date,
+        time: bookingPayload.time,
+        lessonType: bookingPayload.lessonType,
+        message: bookingPayload.message
+      });
+    } catch {
+      // Keep the booking if the email fails.
+    }
+
     document.getElementById("student-booking-message").value = "";
     setStudentBookingFeedback(
-      `Booked for ${formatStudentDate(result.booking.date, result.booking.time)} at ${result.booking.time}.`,
+      `Booked for ${formatStudentDate(result.booking.date, result.booking.time)} at ${result.booking.time}. Your class is now saved on the server.`,
       "success"
     );
 
-    renderStudentDashboard(window.HWFData.getStudentById(currentStudent.id));
+    const refreshedStudent = await hydrateStudentFromServer(window.HWFData.getStudentById(currentStudent.id));
+    renderStudentDashboard(refreshedStudent);
   });
 }
 
@@ -499,6 +591,7 @@ function bindStudentLogin() {
 
   document.getElementById("student-logout").addEventListener("click", async () => {
     currentStudent = null;
+    currentSupabaseUserId = "";
     selectedStudentRating = 0;
     selectedStudentBookingDate = "";
     selectedStudentBookingTime = "";

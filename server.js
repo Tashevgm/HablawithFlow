@@ -11,6 +11,7 @@ const port = Number(process.env.PORT || 8787);
 const resendApiKey = process.env.RESEND_API_KEY;
 const emailFrom = process.env.EMAIL_FROM || "Hablawithflow <onboarding@resend.dev>";
 const ownerEmail = process.env.OWNER_EMAIL || "";
+const publicSiteUrl = process.env.PUBLIC_SITE_URL || "https://hablawithflow.com";
 
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
@@ -60,18 +61,66 @@ function bookingHtml({ studentName, date, time, lessonType, message }) {
 
 function registrationHtml({ name, email, track, goal, timezone }) {
   return `
-    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1a1a1a">
-      <h2 style="margin-bottom:8px">Your registration is confirmed</h2>
-      <p>Hi ${name},</p>
-      <p>Your Hablawithflow registration has been confirmed successfully.</p>
-      <ul>
-        <li><strong>Email:</strong> ${email}</li>
-        <li><strong>Track:</strong> ${track}</li>
-        <li><strong>Main goal:</strong> ${goal}</li>
-        <li><strong>Timezone:</strong> ${timezone}</li>
-      </ul>
-      <p>You can now sign in to the student portal using the email and password you created.</p>
-      <p>If you book a lesson, you will also receive a separate booking confirmation email.</p>
+    <div style="margin:0;padding:32px 16px;background:#f6f1ea;font-family:Arial,sans-serif;color:#1a1a1a;">
+      <div style="max-width:640px;margin:0 auto;background:#fffdf9;border:1px solid #eadfd7;border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,0.08);">
+        <div style="padding:18px 28px;background:linear-gradient(135deg,#c0392b 0%,#cf4c35 100%);color:#ffffff;">
+          <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700;opacity:0.86;">Bienvenido</div>
+          <h1 style="margin:10px 0 0;font-size:30px;line-height:1.15;font-family:Georgia,serif;font-weight:700;">Welcome to Hablawithflow</h1>
+        </div>
+
+        <div style="padding:32px 28px;">
+          <p style="margin:0 0 14px;font-size:18px;line-height:1.6;">Hi ${name},</p>
+          <p style="margin:0 0 22px;font-size:16px;line-height:1.7;color:#514741;">
+            Your registration is confirmed and your Spanish journey is officially underway.
+            We are excited to help you build confidence, rhythm, and real conversational flow.
+          </p>
+
+          <div style="margin:0 0 24px;padding:20px;border-radius:18px;background:#fbf5ef;border:1px solid #efe1d5;">
+            <div style="margin:0 0 14px;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;color:#8c5a47;">
+              Your registration details
+            </div>
+            <table role="presentation" style="width:100%;border-collapse:collapse;">
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Email</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${email}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Track</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${track}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Main goal</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${goal}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Timezone</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${timezone}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="margin:0 0 26px;padding:18px 20px;border-radius:18px;background:#eaf7f4;border:1px solid #bfe7dc;">
+            <div style="margin:0 0 8px;font-size:14px;font-weight:700;color:#116d5a;">What happens next</div>
+            <p style="margin:0;font-size:15px;line-height:1.7;color:#36504b;">
+              You can now sign in to your student portal with the email and password you created,
+              and when you book a lesson you will receive a separate confirmation email as well.
+            </p>
+          </div>
+
+          <div style="margin:0 0 24px;">
+            <a href="${publicSiteUrl}/student-portal.html" style="display:inline-block;padding:14px 22px;margin:0 12px 12px 0;border-radius:10px;background:#c0392b;color:#ffffff;text-decoration:none;font-weight:700;">
+              Open Student Portal
+            </a>
+            <a href="${publicSiteUrl}/#booking" style="display:inline-block;padding:14px 22px;margin:0 12px 12px 0;border-radius:10px;border:2px solid #1abc9c;color:#1abc9c;text-decoration:none;font-weight:700;">
+              Book Your First Lesson
+            </a>
+          </div>
+
+          <p style="margin:0;font-size:14px;line-height:1.7;color:#7c6e67;">
+            Gracias for registering with Hablawithflow. We will see you inside the portal soon.
+          </p>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -115,7 +164,7 @@ app.post("/api/email/register", async (request, response) => {
       resend.emails.send({
         from: emailFrom,
         to: email,
-        subject: "Your Hablawithflow registration is confirmed",
+        subject: "Bienvenido to Hablawithflow | Your registration is confirmed",
         html: registrationHtml({
           name,
           email,

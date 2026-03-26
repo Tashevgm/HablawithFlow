@@ -25,6 +25,48 @@ let bookingMonth = null;
 let selectedBookingDate = "";
 let selectedBookingTime = "";
 
+async function getAuthenticatedBookingUser(email) {
+  if (!window.supabaseClient) {
+    return null;
+  }
+
+  const {
+    data: { user }
+  } = await window.supabaseClient.auth.getUser();
+
+  if (!user || !user.email || user.email.toLowerCase() !== email.toLowerCase()) {
+    return null;
+  }
+
+  return user;
+}
+
+async function saveServerBookingIfAuthenticated({ studentName, email, date, time, lessonType, message }) {
+  const user = await getAuthenticatedBookingUser(email);
+
+  if (!user) {
+    return { ok: false, skipped: true };
+  }
+
+  const { error } = await window.supabaseClient.from("bookings").insert({
+    student_id: user.id,
+    student_email: email,
+    student_name: studentName,
+    lesson_type: lessonType,
+    lesson_date: date,
+    lesson_time: time,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London",
+    message,
+    status: "confirmed"
+  });
+
+  if (error) {
+    return { ok: false, skipped: false, error: error.message };
+  }
+
+  return { ok: true, skipped: false };
+}
+
 function getInitials(name) {
   return name
     .trim()
@@ -465,6 +507,22 @@ function bindBookingForm() {
     renderBookingTimes();
 
     let emailMessage = "";
+    let serverMessage = "";
+
+    const serverResult = await saveServerBookingIfAuthenticated({
+      studentName,
+      email,
+      date: result.booking.date,
+      time: result.booking.time,
+      lessonType,
+      message
+    });
+
+    if (serverResult.ok) {
+      serverMessage = " The class was also saved to your server-side student record.";
+    } else if (!serverResult.skipped) {
+      serverMessage = " The booking saved locally, but the server copy could not be created yet.";
+    }
 
     try {
       await window.HWFEmailApi.sendBookingEmail({
@@ -482,8 +540,8 @@ function bindBookingForm() {
 
     setBookingFeedback(
       result.registration.created
-        ? `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. To use the student portal, register with the same email and create your password.${emailMessage}`
-        : `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. If you already registered, you can manage your lessons from the student portal.${emailMessage}`,
+        ? `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. To use the student portal, register with the same email and create your password.${serverMessage}${emailMessage}`
+        : `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. If you already registered, you can manage your lessons from the student portal.${serverMessage}${emailMessage}`,
       "success"
     );
   });
