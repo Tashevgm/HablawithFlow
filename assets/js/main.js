@@ -41,6 +41,93 @@ async function getAuthenticatedBookingUser(email) {
   return user;
 }
 
+function isAlreadyRegisteredAuthError(message) {
+  const normalized = String(message || "").toLowerCase();
+  return (
+    normalized.includes("already registered") ||
+    normalized.includes("already been registered") ||
+    normalized.includes("already exists")
+  );
+}
+
+async function ensureBookingAccount({ studentName, email, password, lessonType, message }) {
+  if (!window.supabaseClient) {
+    return {
+      ok: false,
+      error: "Account signup is not configured yet."
+    };
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
+
+  const {
+    data: { user: currentUser }
+  } = await window.supabaseClient.auth.getUser();
+
+  if (currentUser?.email && currentUser.email.toLowerCase() === normalizedEmail) {
+    return {
+      ok: true,
+      created: false,
+      existingAccount: true,
+      sessionActive: true
+    };
+  }
+
+  const { data, error } = await window.supabaseClient.auth.signUp({
+    email: normalizedEmail,
+    password,
+    options: {
+      data: {
+        full_name: studentName,
+        level: "Beginner",
+        track: lessonType,
+        timezone,
+        goal: "Free trial lesson",
+        notes: message
+      }
+    }
+  });
+
+  if (error) {
+    if (isAlreadyRegisteredAuthError(error.message)) {
+      return {
+        ok: true,
+        created: false,
+        existingAccount: true,
+        sessionActive: false
+      };
+    }
+
+    return {
+      ok: false,
+      error: error.message || "Could not create your student account."
+    };
+  }
+
+  const sessionActive = Boolean(data?.session);
+
+  if (data?.user && sessionActive) {
+    await window.supabaseClient.from("profiles").upsert({
+      id: data.user.id,
+      full_name: studentName,
+      level: "Beginner",
+      track: lessonType,
+      timezone,
+      goal: "Free trial lesson",
+      notes: message
+    });
+  }
+
+  return {
+    ok: true,
+    created: true,
+    existingAccount: false,
+    sessionActive,
+    confirmationPending: Boolean(data?.user && !sessionActive)
+  };
+}
+
 async function saveServerBookingIfAuthenticated({ studentName, email, date, time, lessonType, message }) {
   const user = await getAuthenticatedBookingUser(email);
 
@@ -470,13 +557,38 @@ function bindBookingForm() {
 
     const studentName = document.getElementById("booking-name").value.trim();
     const email = document.getElementById("booking-email").value.trim();
+    const password = document.getElementById("booking-password").value;
+    const confirmPassword = document.getElementById("booking-password-confirm").value;
     const date = document.getElementById("booking-date").value;
     const time = document.getElementById("booking-time").value;
     const lessonType = document.getElementById("booking-lesson").value;
     const message = document.getElementById("booking-message").value.trim();
 
-    if (!studentName || !email || !date || !time) {
-      setBookingFeedback("Please complete your name, email, and choose an available lesson slot.", "error");
+    if (!studentName || !email || !password || !confirmPassword || !date || !time) {
+      setBookingFeedback("Please complete your name, email, password, and choose an available lesson slot.", "error");
+      return;
+    }
+
+    if (password.length < 8) {
+      setBookingFeedback("Please create a password with at least 8 characters.", "error");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setBookingFeedback("Password confirmation does not match.", "error");
+      return;
+    }
+
+    const accountResult = await ensureBookingAccount({
+      studentName,
+      email,
+      password,
+      lessonType,
+      message
+    });
+
+    if (!accountResult.ok) {
+      setBookingFeedback(accountResult.error, "error");
       return;
     }
 
@@ -506,8 +618,17 @@ function bindBookingForm() {
     renderBookingMonth();
     renderBookingTimes();
 
+    let accountMessage = "";
     let emailMessage = "";
     let serverMessage = "";
+
+    if (accountResult.created && accountResult.confirmationPending) {
+      accountMessage = " Your student account was created. Check your inbox to confirm your email before logging in.";
+    } else if (accountResult.created) {
+      accountMessage = " Your student account was created with this password.";
+    } else {
+      accountMessage = " This email already has a student account, so use your existing password to log in.";
+    }
 
     const serverResult = await saveServerBookingIfAuthenticated({
       studentName,
@@ -548,8 +669,8 @@ function bindBookingForm() {
 
     setBookingFeedback(
       result.registration.created
-        ? `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}.${serverMessage}${emailMessage}`
-        : `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. If you already registered, you can manage your lessons from the student portal.${serverMessage}${emailMessage}`,
+        ? `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}.${accountMessage}${serverMessage}${emailMessage}`
+        : `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. If you already registered, you can manage your lessons from the student portal.${accountMessage}${serverMessage}${emailMessage}`,
       "success"
     );
   });
