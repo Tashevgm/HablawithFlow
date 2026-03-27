@@ -10,6 +10,10 @@ let currentView = "week";
 let focusMonth = new Date();
 let focusedDate = "";
 
+function getPasswordResetRedirect() {
+  return `${window.location.origin}/set-password.html`;
+}
+
 function byId(id) {
   return document.getElementById(id);
 }
@@ -140,6 +144,27 @@ function clearTeacherError() {
 
   error.hidden = true;
   error.textContent = "";
+}
+
+function setTeacherLoginFeedback(message, type) {
+  const feedback = byId("admin-login-feedback");
+  if (!feedback) {
+    return;
+  }
+
+  feedback.textContent = message;
+  feedback.className = `booking-feedback ${type}`;
+  feedback.hidden = false;
+}
+
+function clearTeacherLoginFeedback() {
+  const feedback = byId("admin-login-feedback");
+  if (!feedback) {
+    return;
+  }
+
+  feedback.hidden = true;
+  feedback.textContent = "";
 }
 
 function ensureFocusedDate() {
@@ -688,6 +713,7 @@ function renderAdminDashboard() {
 
 function bindTeacherAuth() {
   const button = byId("admin-login");
+  const forgotButton = byId("admin-forgot-password");
 
   if (!button) {
     return;
@@ -696,6 +722,9 @@ function bindTeacherAuth() {
   button.addEventListener("click", async () => {
     const email = byId("admin-email").value.trim().toLowerCase();
     const password = byId("admin-password").value;
+
+    clearTeacherError();
+    clearTeacherLoginFeedback();
 
     if (!email || !password) {
       showTeacherError("Enter your teacher email and password.");
@@ -714,6 +743,30 @@ function bindTeacherAuth() {
 
     await openTeacherDashboardFromSession();
   });
+
+  if (forgotButton) {
+    forgotButton.addEventListener("click", async () => {
+      const email = byId("admin-email").value.trim().toLowerCase();
+      clearTeacherError();
+      clearTeacherLoginFeedback();
+
+      if (!email) {
+        setTeacherLoginFeedback("Enter your email first, then click Forgot password.", "error");
+        return;
+      }
+
+      const { error } = await window.supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: getPasswordResetRedirect()
+      });
+
+      if (error) {
+        setTeacherLoginFeedback(error.message, "error");
+        return;
+      }
+
+      setTeacherLoginFeedback("Password reset email sent. Check your inbox and open the link to set a new password.", "success");
+    });
+  }
 }
 
 function setTeacherInterestFeedback(message, type) {

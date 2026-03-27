@@ -8,6 +8,10 @@ let studentBookingMonth = null;
 let selectedStudentBookingDate = "";
 let selectedStudentBookingTime = "";
 
+function getPasswordResetRedirect() {
+  return `${window.location.origin}/set-password.html`;
+}
+
 function formatStudentDate(date, time) {
   return new Date(`${date}T${time}`).toLocaleDateString("en-GB", {
     weekday: "short",
@@ -263,6 +267,13 @@ function updateStudentBookingButton() {
 
 function setStudentBookingFeedback(message, type) {
   const feedback = document.getElementById("student-booking-feedback");
+  feedback.textContent = message;
+  feedback.className = `booking-feedback ${type}`;
+  feedback.hidden = false;
+}
+
+function setStudentLoginFeedback(message, type) {
+  const feedback = document.getElementById("student-login-feedback");
   feedback.textContent = message;
   feedback.className = `booking-feedback ${type}`;
   feedback.hidden = false;
@@ -574,6 +585,10 @@ function bindStudentLogin() {
     const email = document.getElementById("student-email").value;
     const password = document.getElementById("student-password").value;
     const error = document.getElementById("student-error");
+    const loginFeedback = document.getElementById("student-login-feedback");
+
+    error.hidden = true;
+    loginFeedback.hidden = true;
 
     const { error: signInError } = await window.supabaseClient.auth.signInWithPassword({
       email,
@@ -589,6 +604,28 @@ function bindStudentLogin() {
     await openStudentDashboardFromSession();
   });
 
+  document.getElementById("student-forgot-password").addEventListener("click", async () => {
+    const email = document.getElementById("student-email").value.trim();
+    const error = document.getElementById("student-error");
+    error.hidden = true;
+
+    if (!email) {
+      setStudentLoginFeedback("Enter your email first, then click Forgot password.", "error");
+      return;
+    }
+
+    const { error: resetError } = await window.supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: getPasswordResetRedirect()
+    });
+
+    if (resetError) {
+      setStudentLoginFeedback(resetError.message, "error");
+      return;
+    }
+
+    setStudentLoginFeedback("Password reset email sent. Check your inbox and open the link to set a new password.", "success");
+  });
+
   document.getElementById("student-logout").addEventListener("click", async () => {
     currentStudent = null;
     currentSupabaseUserId = "";
@@ -602,6 +639,7 @@ function bindStudentLogin() {
     document.getElementById("student-password").value = "";
     document.getElementById("student-review-feedback").hidden = true;
     document.getElementById("student-booking-feedback").hidden = true;
+    document.getElementById("student-login-feedback").hidden = true;
     document.getElementById("student-booking-message").value = "";
     setStudentStarPreview(0);
   });

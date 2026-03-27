@@ -877,6 +877,28 @@ textarea {
   font-size: 0.82rem;
 }
 
+.auth-utility {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 8px;
+}
+
+.auth-link-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--teal);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-link-btn:hover,
+.auth-link-btn:focus-visible {
+  color: #159d83;
+  text-decoration: underline;
+}
+
 .review-success {
   text-align: center;
   padding: 40px 20px;
