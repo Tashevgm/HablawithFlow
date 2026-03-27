@@ -289,18 +289,21 @@ function bindOwnerAuth() {
       setAuthFeedback("Sending reset email...", "success");
 
       try {
-        const result = await sendOwnerApiRequest("/api/owner/password-reset", {
-          method: "POST",
-          payload: {
-            email,
-            redirectTo: getPasswordResetRedirect()
-          }
+        if (!window.supabaseClient) {
+          setAuthFeedback("Supabase auth is not configured yet.", "error");
+          return;
+        }
+
+        const { error } = await window.supabaseClient.auth.resetPasswordForEmail(email, {
+          redirectTo: getPasswordResetRedirect()
         });
-        setAuthFeedback(
-          result.message || "Password reset request completed.",
-          "success"
-        );
-        showOwnerResetLink(result.resetUrl || "");
+
+        if (error) {
+          setAuthFeedback(error.message, "error");
+          return;
+        }
+
+        setAuthFeedback("Password reset email sent. Check your inbox and open the link to continue.", "success");
       } catch (error) {
         setAuthFeedback(error.message || "Could not send reset email right now. Please try again.", "error");
       } finally {
