@@ -1,3 +1,3 @@
 window.HWF_APP_CONFIG = {
-  apiBase: ""
+  apiBase: "https://YOUR-RENDER-BACKEND-URL"
 };
