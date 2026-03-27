@@ -7,6 +7,43 @@ function setPasswordFeedback(message, type) {
 
 let pendingBookingCompletionAttempted = false;
 
+function readRecoveryTokensFromHash() {
+  const hash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const params = new URLSearchParams(hash);
+  const accessToken = params.get("access_token") || "";
+  const refreshToken = params.get("refresh_token") || "";
+  return { accessToken, refreshToken };
+}
+
+function clearRecoveryHash() {
+  if (!window.location.hash) {
+    return;
+  }
+  const cleanUrl = `${window.location.pathname}${window.location.search}`;
+  window.history.replaceState({}, document.title, cleanUrl);
+}
+
+async function restoreSessionFromRecoveryHash() {
+  const { accessToken, refreshToken } = readRecoveryTokensFromHash();
+  if (!accessToken) {
+    return;
+  }
+
+  const { error } = await window.supabaseClient.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken || accessToken
+  });
+
+  if (error) {
+    setPasswordFeedback("This setup link is invalid or expired. Request a new reset email and try again.", "error");
+    return;
+  }
+
+  clearRecoveryHash();
+}
+
 async function completePendingBookingAfterConfirmation() {
   if (pendingBookingCompletionAttempted || !window.HWFEmailApi || !window.supabaseClient) {
     return;
@@ -102,5 +139,10 @@ window.supabaseClient.auth.onAuthStateChange(async (event) => {
   }
 });
 
-bindSetPasswordForm();
-refreshPasswordSetupState();
+async function initSetPasswordPage() {
+  bindSetPasswordForm();
+  await restoreSessionFromRecoveryHash();
+  await refreshPasswordSetupState();
+}
+
+initSetPasswordPage();

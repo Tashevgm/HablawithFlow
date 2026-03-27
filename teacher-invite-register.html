@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Registration Portal | Hablawithflow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <main class="site-main portal-main">
+    <section class="portal-shell" style="max-width:900px">
+      <article class="dashboard-card auth-card">
+        <h1>Teacher Registration Portal</h1>
+        <p class="section-sub portal-sub">
+          This page is private and shared directly by link.
+        </p>
+
+        <div class="booking-feedback" id="invite-gate-message">
+          Loading portal...
+        </div>
+
+        <form id="invite-register-form" class="booking-form" hidden>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="invite-name">Teacher Full Name</label>
+              <input type="text" id="invite-name" placeholder="Teacher name" required>
+            </div>
+            <div class="form-group">
+              <label for="invite-email">Teacher Email</label>
+              <input type="email" id="invite-email" placeholder="teacher@email.com" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="invite-timezone">Timezone</label>
+              <input type="text" id="invite-timezone" value="Europe/London">
+            </div>
+            <div class="form-group">
+              <label for="invite-hourly-rate">Hourly Rate (optional)</label>
+              <input type="number" id="invite-hourly-rate" min="0" step="0.01" placeholder="40.00">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="invite-bio">Short Bio (optional)</label>
+            <textarea id="invite-bio" placeholder="Teaching focus, languages, and notes."></textarea>
+          </div>
+
+          <button class="btn-submit" id="invite-register-submit" type="submit">Create Teacher Access</button>
+          <div class="booking-feedback" id="invite-register-feedback" hidden></div>
+        </form>
+
+        <div class="form-group" id="invite-manual-link-wrap" hidden>
+          <label for="invite-manual-setup-link">Manual Setup Link</label>
+          <textarea id="invite-manual-setup-link" readonly></textarea>
+          <p class="portal-sub">Shown only when invite email is not sent automatically.</p>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script src="assets/js/app-config.js"></script>
+  <script src="assets/js/teacher-invite-register.js"></script>
+</body>
+</html>

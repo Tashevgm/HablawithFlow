@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+const crypto = require("crypto");
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
@@ -12,6 +13,7 @@ const port = Number(process.env.PORT || 8787);
 const resendApiKey = process.env.RESEND_API_KEY;
 const emailFrom = process.env.EMAIL_FROM || "Hablawithflow <onboarding@resend.dev>";
 const ownerEmail = process.env.OWNER_EMAIL || "";
+const teacherInviteToken = process.env.TEACHER_INVITE_TOKEN || "";
 const publicSiteUrl = process.env.PUBLIC_SITE_URL || "https://hablawithflow.com";
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -36,6 +38,20 @@ app.use(express.json());
 
 function required(value) {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function secureTokenMatch(expected, provided) {
+  if (!required(expected) || !required(provided)) {
+    return false;
+  }
+
+  const expectedBuffer = Buffer.from(expected.trim(), "utf8");
+  const providedBuffer = Buffer.from(provided.trim(), "utf8");
+  if (expectedBuffer.length !== providedBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expectedBuffer, providedBuffer);
 }
 
 function jsonError(response, status, message) {
@@ -434,6 +450,91 @@ async function createInviteLinkForTrialStudent({ studentName, email, lessonType,
   };
 }
 
+async function registerTeacherAccess({ name, email, timezone, bio, hourlyRate, source }) {
+  const teacherName = name.trim();
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedTimezone = required(timezone) ? timezone.trim() : "Europe/London";
+  const teacherBio = required(bio) ? bio.trim() : "";
+  const parsedHourlyRate = Number(hourlyRate);
+  const normalizedHourlyRate = Number.isFinite(parsedHourlyRate) && parsedHourlyRate > 0 ? parsedHourlyRate : null;
+  const inviteSource = required(source) ? source.trim() : "teacher_registration";
+
+  let existingUser = false;
+  let accountSetupUrl = "";
+  let targetUser = await findAuthUserByEmail(normalizedEmail);
+
+  if (targetUser) {
+    existingUser = true;
+  } else {
+    const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.generateLink({
+      type: "invite",
+      email: normalizedEmail,
+      options: {
+        redirectTo: toPortalUrl("/set-password.html")
+      },
+      data: {
+        full_name: teacherName,
+        role: "teacher",
+        timezone: normalizedTimezone,
+        notes: teacherBio,
+        source: inviteSource
+      }
+    });
+
+    if (inviteError) {
+      throw inviteError;
+    }
+
+    targetUser = inviteData?.user || null;
+    accountSetupUrl = inviteData?.properties?.action_link || "";
+  }
+
+  if (!targetUser?.id) {
+    throw new Error("Could not resolve teacher auth user id.");
+  }
+
+  const { error: profileUpsertError } = await supabaseAdmin.from("profiles").upsert({
+    id: targetUser.id,
+    full_name: teacherName,
+    role: "teacher",
+    timezone: normalizedTimezone,
+    notes: teacherBio
+  });
+  if (profileUpsertError) {
+    throw profileUpsertError;
+  }
+
+  const { error: teacherProfileUpsertError } = await supabaseAdmin.from("teacher_profiles").upsert({
+    id: targetUser.id,
+    bio: teacherBio || null,
+    hourly_rate: normalizedHourlyRate,
+    timezone: normalizedTimezone
+  });
+  if (teacherProfileUpsertError) {
+    throw teacherProfileUpsertError;
+  }
+
+  let inviteEmailSent = false;
+  if (!existingUser && required(accountSetupUrl) && resend) {
+    await resend.emails.send({
+      from: emailFrom,
+      to: normalizedEmail,
+      subject: "Your Hablawithflow teacher account is ready",
+      html: teacherInviteHtml({
+        teacherName,
+        accountSetupUrl
+      })
+    });
+    inviteEmailSent = true;
+  }
+
+  return {
+    existingUser,
+    inviteEmailSent,
+    accountSetupUrl: existingUser || inviteEmailSent ? "" : accountSetupUrl
+  };
+}
+
 app.get("/api", (request, response) => {
   response.type("html").send(`
     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1a1a1a;padding:32px;max-width:760px">
@@ -454,6 +555,110 @@ app.get("/api/health", (request, response) => {
     ok: true,
     service: "hablawithflow-app-backend"
   });
+});
+
+app.post("/api/teacher-invite/validate", (request, response) => {
+  if (!required(teacherInviteToken)) {
+    jsonError(response, 500, "TEACHER_INVITE_TOKEN is not configured on the server.");
+    return;
+  }
+
+  const { token } = request.body || {};
+  if (!secureTokenMatch(teacherInviteToken, token || "")) {
+    jsonError(response, 403, "Invalid teacher invite token.");
+    return;
+  }
+
+  response.json({
+    ok: true,
+    message: "Invite token accepted."
+  });
+});
+
+app.post("/api/teacher-invite/register", async (request, response) => {
+  try {
+    if (!ensureSupabaseAdmin(response)) {
+      return;
+    }
+
+    if (!required(teacherInviteToken)) {
+      jsonError(response, 500, "TEACHER_INVITE_TOKEN is not configured on the server.");
+      return;
+    }
+
+    const { token, name, email, timezone, bio, hourlyRate } = request.body || {};
+    if (!secureTokenMatch(teacherInviteToken, token || "")) {
+      jsonError(response, 403, "Invalid teacher invite token.");
+      return;
+    }
+
+    if (![name, email].every(required)) {
+      jsonError(response, 400, "Missing teacher registration fields.");
+      return;
+    }
+
+    const result = await registerTeacherAccess({
+      name,
+      email,
+      timezone,
+      bio,
+      hourlyRate,
+      source: "teacher_private_invite"
+    });
+
+    response.json({
+      ok: true,
+      message: result.existingUser
+        ? "Teacher access granted to existing account."
+        : result.inviteEmailSent
+          ? "Teacher invite sent."
+          : "Teacher account created. Share the setup link manually.",
+      existingUser: result.existingUser,
+      inviteEmailSent: result.inviteEmailSent,
+      accountSetupUrl: result.accountSetupUrl
+    });
+  } catch (error) {
+    console.error("Failed to register teacher from invite link", error);
+    jsonError(response, 500, "Failed to register teacher account.");
+  }
+});
+
+app.post("/api/teacher/register", async (request, response) => {
+  try {
+    if (!ensureSupabaseAdmin(response)) {
+      return;
+    }
+
+    const { name, email, timezone, bio, hourlyRate } = request.body || {};
+    if (![name, email].every(required)) {
+      jsonError(response, 400, "Missing teacher registration fields.");
+      return;
+    }
+
+    const result = await registerTeacherAccess({
+      name,
+      email,
+      timezone,
+      bio,
+      hourlyRate,
+      source: "teacher_private_portal"
+    });
+
+    response.json({
+      ok: true,
+      message: result.existingUser
+        ? "Teacher access granted to existing account."
+        : result.inviteEmailSent
+          ? "Teacher invite sent."
+          : "Teacher account created. Share the setup link manually.",
+      existingUser: result.existingUser,
+      inviteEmailSent: result.inviteEmailSent,
+      accountSetupUrl: result.accountSetupUrl
+    });
+  } catch (error) {
+    console.error("Failed to register teacher from private portal", error);
+    jsonError(response, 500, "Failed to register teacher account.");
+  }
 });
 
 app.post("/api/booking/confirm-email-complete", async (request, response) => {
@@ -701,92 +906,25 @@ app.post("/api/owner/teacher-register", async (request, response) => {
       return;
     }
 
-    const teacherName = name.trim();
-    const normalizedEmail = email.trim().toLowerCase();
-    const normalizedTimezone = required(timezone) ? timezone.trim() : "Europe/London";
-    const teacherBio = required(bio) ? bio.trim() : "";
-    const parsedHourlyRate = Number(hourlyRate);
-    const normalizedHourlyRate = Number.isFinite(parsedHourlyRate) && parsedHourlyRate > 0 ? parsedHourlyRate : null;
-
-    let existingUser = false;
-    let accountSetupUrl = "";
-    let targetUser = await findAuthUserByEmail(normalizedEmail);
-
-    if (targetUser) {
-      existingUser = true;
-    } else {
-      const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.generateLink({
-        type: "invite",
-        email: normalizedEmail,
-        options: {
-          redirectTo: toPortalUrl("/set-password.html")
-        },
-        data: {
-          full_name: teacherName,
-          role: "teacher",
-          timezone: normalizedTimezone,
-          notes: teacherBio,
-          source: "owner_teacher_registration"
-        }
-      });
-
-      if (inviteError) {
-        throw inviteError;
-      }
-
-      targetUser = inviteData?.user || null;
-      accountSetupUrl = inviteData?.properties?.action_link || "";
-    }
-
-    if (!targetUser?.id) {
-      throw new Error("Could not resolve teacher auth user id.");
-    }
-
-    const { error: profileUpsertError } = await supabaseAdmin.from("profiles").upsert({
-      id: targetUser.id,
-      full_name: teacherName,
-      role: "teacher",
-      timezone: normalizedTimezone,
-      notes: teacherBio
+    const result = await registerTeacherAccess({
+      name,
+      email,
+      timezone,
+      bio,
+      hourlyRate,
+      source: "owner_teacher_registration"
     });
-    if (profileUpsertError) {
-      throw profileUpsertError;
-    }
-
-    const { error: teacherProfileUpsertError } = await supabaseAdmin.from("teacher_profiles").upsert({
-      id: targetUser.id,
-      bio: teacherBio || null,
-      hourly_rate: normalizedHourlyRate,
-      timezone: normalizedTimezone
-    });
-    if (teacherProfileUpsertError) {
-      throw teacherProfileUpsertError;
-    }
-
-    let inviteEmailSent = false;
-    if (!existingUser && required(accountSetupUrl) && resend) {
-      await resend.emails.send({
-        from: emailFrom,
-        to: normalizedEmail,
-        subject: "Your Hablawithflow teacher account is ready",
-        html: teacherInviteHtml({
-          teacherName,
-          accountSetupUrl
-        })
-      });
-      inviteEmailSent = true;
-    }
 
     response.json({
       ok: true,
-      message: existingUser
+      message: result.existingUser
         ? "Teacher access granted to existing account."
-        : inviteEmailSent
+        : result.inviteEmailSent
           ? "Teacher invite sent."
           : "Teacher account created. Share the setup link manually.",
-      existingUser,
-      inviteEmailSent,
-      accountSetupUrl: existingUser || inviteEmailSent ? "" : accountSetupUrl,
+      existingUser: result.existingUser,
+      inviteEmailSent: result.inviteEmailSent,
+      accountSetupUrl: result.accountSetupUrl,
       requestedBy: ownerUser.email || ""
     });
   } catch (error) {
