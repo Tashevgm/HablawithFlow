@@ -2,8 +2,8 @@ const CALENDAR_START_HOUR = 8;
 const CALENDAR_END_HOUR = 20;
 const CALENDAR_STEP_MINUTES = 60;
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const APPROVED_TEACHER_EMAILS = ["vtsagov@gmail.com"];
 const IS_TEACHER_STUDENTS_PAGE = window.location.pathname.endsWith("/teacher-students.html") || window.location.pathname.endsWith("teacher-students.html");
+const TEACHER_ROLES = new Set(["teacher", "admin"]);
 
 let currentWeekStart = getStartOfWeek(new Date());
 let currentView = "week";
@@ -122,10 +122,6 @@ function getOpenDates() {
   return [...new Set(getAvailability().map((slot) => slot.date))].sort();
 }
 
-function isApprovedTeacherEmail(email) {
-  return APPROVED_TEACHER_EMAILS.includes((email || "").trim().toLowerCase());
-}
-
 function showTeacherError(message) {
   const error = byId("admin-error");
   if (!error) {
@@ -183,6 +179,41 @@ function showTeacherDashboard() {
   renderAdminDashboard();
 }
 
+async function getTeacherRoleForUser(userId) {
+  const { data, error } = await window.supabaseClient
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    return {
+      ok: false,
+      error: "Could not verify teacher role. Check the profiles table and permissions."
+    };
+  }
+
+  if (!data || !data.role) {
+    return {
+      ok: false,
+      error: "This account has no teacher role yet. Ask admin to set role = teacher."
+    };
+  }
+
+  const role = String(data.role).toLowerCase();
+  if (!TEACHER_ROLES.has(role)) {
+    return {
+      ok: false,
+      error: "This account does not have teacher access."
+    };
+  }
+
+  return {
+    ok: true,
+    role
+  };
+}
+
 async function openTeacherDashboardFromSession() {
   if (!window.supabaseClient) {
     showTeacherError("Teacher login is not configured.");
@@ -200,9 +231,10 @@ async function openTeacherDashboardFromSession() {
     return false;
   }
 
-  if (!isApprovedTeacherEmail(user.email)) {
+  const roleResult = await getTeacherRoleForUser(user.id);
+  if (!roleResult.ok) {
     await window.supabaseClient.auth.signOut();
-    showTeacherError("This email is not approved for teacher access.");
+    showTeacherError(roleResult.error);
     if (IS_TEACHER_STUDENTS_PAGE) {
       window.location.href = "admin.html";
     }
@@ -670,11 +702,6 @@ function bindTeacherAuth() {
       return;
     }
 
-    if (!isApprovedTeacherEmail(email)) {
-      showTeacherError("This email is not approved for teacher access.");
-      return;
-    }
-
     const { error } = await window.supabaseClient.auth.signInWithPassword({
       email,
       password
@@ -685,8 +712,7 @@ function bindTeacherAuth() {
       return;
     }
 
-    clearTeacherError();
-    showTeacherDashboard();
+    await openTeacherDashboardFromSession();
   });
 }
 
