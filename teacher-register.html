@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Registration Control | Hablawithflow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <main class="site-main portal-main">
+    <section class="portal-shell" style="max-width:900px">
+      <article class="dashboard-card auth-card" id="owner-login-card">
+        <h1>Owner Access</h1>
+        <p class="section-sub portal-sub">
+          Sign in with your owner account to manage private teacher registration.
+        </p>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="owner-email">Owner Email</label>
+            <input type="email" id="owner-email" placeholder="you@example.com">
+          </div>
+          <div class="form-group">
+            <label for="owner-password">Password</label>
+            <input type="password" id="owner-password" placeholder="Enter your password">
+          </div>
+        </div>
+        <div class="auth-utility">
+          <button class="auth-link-btn" id="owner-forgot-password" type="button">Forgot password?</button>
+        </div>
+        <button class="btn-submit" id="owner-login" type="button">Open Teacher Registration</button>
+        <div class="form-error" id="owner-auth-error" hidden></div>
+        <div class="booking-feedback" id="owner-auth-feedback" hidden></div>
+      </article>
+
+      <article class="dashboard-card" id="owner-register-card" hidden>
+        <div class="card-heading">
+          <div>
+            <h2>Register Teacher Account</h2>
+            <p class="portal-sub">Create teacher access and send setup link from this private page.</p>
+          </div>
+          <div class="portal-shortcuts portal-shortcuts-tight">
+            <button class="btn-outline portal-link" id="owner-logout" type="button">Log Out</button>
+          </div>
+        </div>
+
+        <form id="teacher-register-form" class="booking-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="teacher-name">Teacher Full Name</label>
+              <input type="text" id="teacher-name" placeholder="Teacher name" required>
+            </div>
+            <div class="form-group">
+              <label for="teacher-email">Teacher Email</label>
+              <input type="email" id="teacher-email" placeholder="teacher@email.com" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="teacher-timezone">Timezone</label>
+              <input type="text" id="teacher-timezone" value="Europe/London">
+            </div>
+            <div class="form-group">
+              <label for="teacher-hourly-rate">Hourly Rate (optional)</label>
+              <input type="number" id="teacher-hourly-rate" min="0" step="0.01" placeholder="40.00">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="teacher-bio">Short Bio (optional)</label>
+            <textarea id="teacher-bio" placeholder="Teaching focus, languages, and notes."></textarea>
+          </div>
+
+          <button class="btn-submit" id="teacher-register-submit" type="submit">Create Teacher Access</button>
+          <div class="booking-feedback" id="teacher-register-feedback" hidden></div>
+        </form>
+
+        <div class="form-group" id="manual-link-wrap" hidden>
+          <label for="manual-setup-link">Manual Setup Link</label>
+          <textarea id="manual-setup-link" readonly></textarea>
+          <p class="portal-sub">Shown only when invite email is not sent automatically.</p>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/js/supabase-client.js"></script>
+  <script src="assets/js/app-config.js"></script>
+  <script src="assets/js/owner-teacher-register.js"></script>
+</body>
+</html>

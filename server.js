@@ -54,6 +54,19 @@ function ensureEmailServer(response) {
   return true;
 }
 
+function ensureSupabaseAdmin(response) {
+  if (!supabaseAdmin) {
+    jsonError(
+      response,
+      500,
+      "Supabase admin is not configured. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to the server environment."
+    );
+    return false;
+  }
+
+  return true;
+}
+
 function escapeHtml(value) {
   return String(value || "")
     .replace(/&/g, "&amp;")
@@ -74,6 +87,44 @@ function formatLessonDate(date) {
 
 function toPortalUrl(pathname) {
   return `${publicSiteUrl.replace(/\/$/, "")}${pathname}`;
+}
+
+function readBearerToken(request) {
+  const authorization = request.headers?.authorization || "";
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : "";
+}
+
+async function requireOwnerAccess(request, response) {
+  if (!ensureSupabaseAdmin(response)) {
+    return null;
+  }
+
+  if (!required(ownerEmail)) {
+    jsonError(response, 500, "OWNER_EMAIL is not configured on the server.");
+    return null;
+  }
+
+  const accessToken = readBearerToken(request);
+  if (!required(accessToken)) {
+    jsonError(response, 401, "Missing owner session token.");
+    return null;
+  }
+
+  const { data, error } = await supabaseAdmin.auth.getUser(accessToken);
+  if (error || !data?.user) {
+    jsonError(response, 401, "Invalid or expired owner session token.");
+    return null;
+  }
+
+  const sessionEmail = (data.user.email || "").trim().toLowerCase();
+  const normalizedOwnerEmail = ownerEmail.trim().toLowerCase();
+  if (sessionEmail !== normalizedOwnerEmail) {
+    jsonError(response, 403, "Owner access only.");
+    return null;
+  }
+
+  return data.user;
 }
 
 function bookingHtml({ studentName, date, time, lessonType, message, accountSetupUrl, isExistingStudent }) {
@@ -149,6 +200,39 @@ function bookingHtml({ studentName, date, time, lessonType, message, accountSetu
 
           <p style="margin:0;font-size:14px;line-height:1.7;color:#7c6e67;">
             If you need to change anything before your lesson, reply to this email and we will help.
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function teacherInviteHtml({ teacherName, accountSetupUrl }) {
+  const safeName = escapeHtml(teacherName);
+  const safeSetupUrl = escapeHtml(accountSetupUrl);
+
+  return `
+    <div style="margin:0;padding:32px 16px;background:#f6f1ea;font-family:Arial,sans-serif;color:#1a1a1a;">
+      <div style="max-width:640px;margin:0 auto;background:#fffdf9;border:1px solid #eadfd7;border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,0.08);">
+        <div style="padding:18px 28px;background:linear-gradient(135deg,#c0392b 0%,#cf4c35 100%);color:#ffffff;">
+          <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700;opacity:0.86;">Teacher Access</div>
+          <h1 style="margin:10px 0 0;font-size:30px;line-height:1.15;font-family:Georgia,serif;font-weight:700;">Welcome to Hablawithflow Teaching Portal</h1>
+        </div>
+
+        <div style="padding:32px 28px;">
+          <p style="margin:0 0 14px;font-size:18px;line-height:1.6;">Hi ${safeName},</p>
+          <p style="margin:0 0 22px;font-size:16px;line-height:1.7;color:#514741;">
+            Your teacher account has been created. Use the secure button below to set your password and activate portal access.
+          </p>
+
+          <div style="margin:0 0 24px;">
+            <a href="${safeSetupUrl}" style="display:inline-block;padding:14px 22px;border-radius:10px;background:#c0392b;color:#ffffff;text-decoration:none;font-weight:700;">
+              Set Your Password
+            </a>
+          </div>
+
+          <p style="margin:0;font-size:14px;line-height:1.7;color:#7c6e67;">
+            After activation, you can sign in from the teacher portal with your email and password.
           </p>
         </div>
       </div>
@@ -330,6 +414,130 @@ app.get("/api/health", (request, response) => {
     ok: true,
     service: "hablawithflow-app-backend"
   });
+});
+
+app.get("/api/owner/access", async (request, response) => {
+  try {
+    const ownerUser = await requireOwnerAccess(request, response);
+    if (!ownerUser) {
+      return;
+    }
+
+    response.json({
+      ok: true,
+      email: ownerUser.email || ""
+    });
+  } catch (error) {
+    console.error("Failed to verify owner access", error);
+    jsonError(response, 500, "Failed to verify owner access.");
+  }
+});
+
+app.post("/api/owner/teacher-register", async (request, response) => {
+  try {
+    const ownerUser = await requireOwnerAccess(request, response);
+    if (!ownerUser) {
+      return;
+    }
+
+    const { name, email, timezone, bio, hourlyRate } = request.body || {};
+    if (![name, email].every(required)) {
+      jsonError(response, 400, "Missing teacher registration fields.");
+      return;
+    }
+
+    const teacherName = name.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedTimezone = required(timezone) ? timezone.trim() : "Europe/London";
+    const teacherBio = required(bio) ? bio.trim() : "";
+    const parsedHourlyRate = Number(hourlyRate);
+    const normalizedHourlyRate = Number.isFinite(parsedHourlyRate) && parsedHourlyRate > 0 ? parsedHourlyRate : null;
+
+    let existingUser = false;
+    let accountSetupUrl = "";
+    let targetUser = await findAuthUserByEmail(normalizedEmail);
+
+    if (targetUser) {
+      existingUser = true;
+    } else {
+      const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.generateLink({
+        type: "invite",
+        email: normalizedEmail,
+        options: {
+          redirectTo: toPortalUrl("/set-password.html")
+        },
+        data: {
+          full_name: teacherName,
+          role: "teacher",
+          timezone: normalizedTimezone,
+          notes: teacherBio,
+          source: "owner_teacher_registration"
+        }
+      });
+
+      if (inviteError) {
+        throw inviteError;
+      }
+
+      targetUser = inviteData?.user || null;
+      accountSetupUrl = inviteData?.properties?.action_link || "";
+    }
+
+    if (!targetUser?.id) {
+      throw new Error("Could not resolve teacher auth user id.");
+    }
+
+    const { error: profileUpsertError } = await supabaseAdmin.from("profiles").upsert({
+      id: targetUser.id,
+      full_name: teacherName,
+      role: "teacher",
+      timezone: normalizedTimezone,
+      notes: teacherBio
+    });
+    if (profileUpsertError) {
+      throw profileUpsertError;
+    }
+
+    const { error: teacherProfileUpsertError } = await supabaseAdmin.from("teacher_profiles").upsert({
+      id: targetUser.id,
+      bio: teacherBio || null,
+      hourly_rate: normalizedHourlyRate,
+      timezone: normalizedTimezone
+    });
+    if (teacherProfileUpsertError) {
+      throw teacherProfileUpsertError;
+    }
+
+    let inviteEmailSent = false;
+    if (!existingUser && required(accountSetupUrl) && resend) {
+      await resend.emails.send({
+        from: emailFrom,
+        to: normalizedEmail,
+        subject: "Your Hablawithflow teacher account is ready",
+        html: teacherInviteHtml({
+          teacherName,
+          accountSetupUrl
+        })
+      });
+      inviteEmailSent = true;
+    }
+
+    response.json({
+      ok: true,
+      message: existingUser
+        ? "Teacher access granted to existing account."
+        : inviteEmailSent
+          ? "Teacher invite sent."
+          : "Teacher account created. Share the setup link manually.",
+      existingUser,
+      inviteEmailSent,
+      accountSetupUrl: existingUser || inviteEmailSent ? "" : accountSetupUrl,
+      requestedBy: ownerUser.email || ""
+    });
+  } catch (error) {
+    console.error("Failed to register teacher account", error);
+    jsonError(response, 500, "Failed to register teacher account.");
+  }
 });
 
 app.post("/api/email/register", async (request, response) => {
