@@ -604,7 +604,9 @@ function bindStudentLogin() {
     await openStudentDashboardFromSession();
   });
 
-  document.getElementById("student-forgot-password").addEventListener("click", async () => {
+  const forgotButton = document.getElementById("student-forgot-password");
+
+  forgotButton.addEventListener("click", async () => {
     const email = document.getElementById("student-email").value.trim();
     const error = document.getElementById("student-error");
     error.hidden = true;
@@ -614,16 +616,30 @@ function bindStudentLogin() {
       return;
     }
 
-    const { error: resetError } = await window.supabaseClient.auth.resetPasswordForEmail(email, {
-      redirectTo: getPasswordResetRedirect()
-    });
-
-    if (resetError) {
-      setStudentLoginFeedback(resetError.message, "error");
+    if (!window.supabaseClient) {
+      setStudentLoginFeedback("Password reset is not configured yet.", "error");
       return;
     }
 
-    setStudentLoginFeedback("Password reset email sent. Check your inbox and open the link to set a new password.", "success");
+    forgotButton.disabled = true;
+    setStudentLoginFeedback("Sending reset email...", "success");
+
+    try {
+      const { error: resetError } = await window.supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: getPasswordResetRedirect()
+      });
+
+      if (resetError) {
+        setStudentLoginFeedback(resetError.message, "error");
+        return;
+      }
+
+      setStudentLoginFeedback("Password reset email sent. Check your inbox and open the link to set a new password.", "success");
+    } catch {
+      setStudentLoginFeedback("Could not send reset email right now. Please try again.", "error");
+    } finally {
+      forgotButton.disabled = false;
+    }
   });
 
   document.getElementById("student-logout").addEventListener("click", async () => {

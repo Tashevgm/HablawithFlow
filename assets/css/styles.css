@@ -880,23 +880,38 @@ textarea {
 .auth-utility {
   display: flex;
   justify-content: flex-end;
-  margin: -4px 0 8px;
+  margin: 2px 0 10px;
 }
 
 .auth-link-btn {
-  padding: 0;
-  border: 0;
-  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 7px 14px;
+  border: 1px solid rgba(26, 188, 156, 0.35);
+  border-radius: 999px;
+  background: rgba(26, 188, 156, 0.1);
   color: var(--teal);
   font-size: 0.84rem;
   font-weight: 700;
+  line-height: 1;
   cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
 .auth-link-btn:hover,
 .auth-link-btn:focus-visible {
-  color: #159d83;
-  text-decoration: underline;
+  border-color: #159d83;
+  background: rgba(26, 188, 156, 0.2);
+  color: #107965;
+  transform: translateY(-1px);
+}
+
+.auth-link-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+  transform: none;
 }
 
 .review-success {

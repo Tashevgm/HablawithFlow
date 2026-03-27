@@ -755,16 +755,30 @@ function bindTeacherAuth() {
         return;
       }
 
-      const { error } = await window.supabaseClient.auth.resetPasswordForEmail(email, {
-        redirectTo: getPasswordResetRedirect()
-      });
-
-      if (error) {
-        setTeacherLoginFeedback(error.message, "error");
+      if (!window.supabaseClient) {
+        setTeacherLoginFeedback("Password reset is not configured yet.", "error");
         return;
       }
 
-      setTeacherLoginFeedback("Password reset email sent. Check your inbox and open the link to set a new password.", "success");
+      forgotButton.disabled = true;
+      setTeacherLoginFeedback("Sending reset email...", "success");
+
+      try {
+        const { error } = await window.supabaseClient.auth.resetPasswordForEmail(email, {
+          redirectTo: getPasswordResetRedirect()
+        });
+
+        if (error) {
+          setTeacherLoginFeedback(error.message, "error");
+          return;
+        }
+
+        setTeacherLoginFeedback("Password reset email sent. Check your inbox and open the link to set a new password.", "success");
+      } catch {
+        setTeacherLoginFeedback("Could not send reset email right now. Please try again.", "error");
+      } finally {
+        forgotButton.disabled = false;
+      }
     });
   }
 }
