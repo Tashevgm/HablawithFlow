@@ -60,6 +60,23 @@ function clearAuthFeedback() {
   feedback.textContent = "";
 }
 
+function showOwnerResetLink(link) {
+  const wrap = byId("owner-reset-link-wrap");
+  const input = byId("owner-reset-link");
+  if (!wrap || !input) {
+    return;
+  }
+
+  if (!required(link)) {
+    wrap.hidden = true;
+    input.value = "";
+    return;
+  }
+
+  input.value = link;
+  wrap.hidden = false;
+}
+
 function setRegisterFeedback(message, type) {
   const feedback = byId("teacher-register-feedback");
   if (!feedback) {
@@ -196,6 +213,7 @@ async function verifyOwnerAccess() {
 async function syncOwnerView(showAuthError) {
   clearAuthError();
   clearAuthFeedback();
+  showOwnerResetLink("");
 
   const access = await verifyOwnerAccess();
   if (!access.ok) {
@@ -259,6 +277,7 @@ function bindOwnerAuth() {
     forgotButton.addEventListener("click", async () => {
       clearAuthError();
       clearAuthFeedback();
+      showOwnerResetLink("");
 
       const email = (byId("owner-email")?.value || "").trim().toLowerCase();
       if (!required(email)) {
@@ -266,27 +285,24 @@ function bindOwnerAuth() {
         return;
       }
 
-      if (!window.supabaseClient) {
-        setAuthFeedback("Password reset is not configured yet.", "error");
-        return;
-      }
-
       forgotButton.disabled = true;
       setAuthFeedback("Sending reset email...", "success");
 
       try {
-        const { error } = await window.supabaseClient.auth.resetPasswordForEmail(email, {
-          redirectTo: getPasswordResetRedirect()
+        const result = await sendOwnerApiRequest("/api/owner/password-reset", {
+          method: "POST",
+          payload: {
+            email,
+            redirectTo: getPasswordResetRedirect()
+          }
         });
-
-        if (error) {
-          setAuthFeedback(error.message, "error");
-          return;
-        }
-
-        setAuthFeedback("Password reset email sent. Check your inbox and open the link to continue.", "success");
-      } catch {
-        setAuthFeedback("Could not send reset email right now. Please try again.", "error");
+        setAuthFeedback(
+          result.message || "Password reset request completed.",
+          "success"
+        );
+        showOwnerResetLink(result.resetUrl || "");
+      } catch (error) {
+        setAuthFeedback(error.message || "Could not send reset email right now. Please try again.", "error");
       } finally {
         forgotButton.disabled = false;
       }

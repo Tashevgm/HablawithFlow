@@ -240,6 +240,37 @@ function teacherInviteHtml({ teacherName, accountSetupUrl }) {
   `;
 }
 
+function ownerPasswordResetHtml({ resetUrl }) {
+  const safeResetUrl = escapeHtml(resetUrl);
+
+  return `
+    <div style="margin:0;padding:32px 16px;background:#f6f1ea;font-family:Arial,sans-serif;color:#1a1a1a;">
+      <div style="max-width:640px;margin:0 auto;background:#fffdf9;border:1px solid #eadfd7;border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,0.08);">
+        <div style="padding:18px 28px;background:linear-gradient(135deg,#c0392b 0%,#cf4c35 100%);color:#ffffff;">
+          <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700;opacity:0.86;">Owner Access</div>
+          <h1 style="margin:10px 0 0;font-size:30px;line-height:1.15;font-family:Georgia,serif;font-weight:700;">Reset your Hablawithflow password</h1>
+        </div>
+
+        <div style="padding:32px 28px;">
+          <p style="margin:0 0 18px;font-size:16px;line-height:1.7;color:#514741;">
+            Use the secure button below to set a new password for your owner account.
+          </p>
+
+          <div style="margin:0 0 24px;">
+            <a href="${safeResetUrl}" style="display:inline-block;padding:14px 22px;border-radius:10px;background:#c0392b;color:#ffffff;text-decoration:none;font-weight:700;">
+              Set New Password
+            </a>
+          </div>
+
+          <p style="margin:0;font-size:14px;line-height:1.7;color:#7c6e67;">
+            If you did not request this, you can ignore this email.
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function registrationHtml({ name, email, track, goal, timezone }) {
   return `
     <div style="margin:0;padding:32px 16px;background:#f6f1ea;font-family:Arial,sans-serif;color:#1a1a1a;">
@@ -430,6 +461,81 @@ app.get("/api/owner/access", async (request, response) => {
   } catch (error) {
     console.error("Failed to verify owner access", error);
     jsonError(response, 500, "Failed to verify owner access.");
+  }
+});
+
+app.post("/api/owner/password-reset", async (request, response) => {
+  try {
+    if (!ensureSupabaseAdmin(response)) {
+      return;
+    }
+
+    if (!required(ownerEmail)) {
+      jsonError(response, 500, "OWNER_EMAIL is not configured on the server.");
+      return;
+    }
+
+    const { email } = request.body || {};
+    if (!required(email)) {
+      jsonError(response, 400, "Owner email is required.");
+      return;
+    }
+
+    const normalizedOwnerEmail = ownerEmail.trim().toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (normalizedEmail !== normalizedOwnerEmail) {
+      jsonError(response, 403, "Only the configured owner email can reset from this page.");
+      return;
+    }
+
+    const ownerUser = await findAuthUserByEmail(normalizedEmail);
+    if (!ownerUser) {
+      jsonError(response, 404, "Owner account does not exist yet. Create it first on the register page.");
+      return;
+    }
+
+    const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+      type: "recovery",
+      email: normalizedEmail,
+      options: {
+        redirectTo: toPortalUrl("/set-password.html")
+      }
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const resetUrl = data?.properties?.action_link || "";
+    if (!required(resetUrl)) {
+      throw new Error("Could not generate password reset link.");
+    }
+
+    let emailSent = false;
+    if (resend) {
+      await resend.emails.send({
+        from: emailFrom,
+        to: normalizedEmail,
+        subject: "Reset your Hablawithflow owner password",
+        html: ownerPasswordResetHtml({
+          resetUrl
+        })
+      });
+      emailSent = true;
+    }
+
+    response.json({
+      ok: true,
+      message: emailSent
+        ? "Password reset email sent."
+        : "Password reset link generated. Email service is not configured.",
+      emailSent,
+      resetUrl: emailSent ? "" : resetUrl
+    });
+  } catch (error) {
+    console.error("Failed to send owner password reset", error);
+    jsonError(response, 500, "Failed to send owner password reset.");
   }
 });
 
