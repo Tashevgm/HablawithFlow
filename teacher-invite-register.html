@@ -48,6 +48,17 @@
             </div>
           </div>
 
+          <div class="form-row">
+            <div class="form-group">
+              <label for="invite-password">Password</label>
+              <input type="password" id="invite-password" placeholder="At least 8 characters" required>
+            </div>
+            <div class="form-group">
+              <label for="invite-password-confirm">Confirm Password</label>
+              <input type="password" id="invite-password-confirm" placeholder="Repeat your password" required>
+            </div>
+          </div>
+
           <div class="form-group">
             <label for="invite-bio">Short Bio (optional)</label>
             <textarea id="invite-bio" placeholder="Teaching focus, languages, and notes."></textarea>
@@ -56,16 +67,12 @@
           <button class="btn-submit" id="invite-register-submit" type="submit">Create Teacher Access</button>
           <div class="booking-feedback" id="invite-register-feedback" hidden></div>
         </form>
-
-        <div class="form-group" id="invite-manual-link-wrap" hidden>
-          <label for="invite-manual-setup-link">Manual Setup Link</label>
-          <textarea id="invite-manual-setup-link" readonly></textarea>
-          <p class="portal-sub">Shown only when invite email is not sent automatically.</p>
-        </div>
       </article>
     </section>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/js/supabase-client.js"></script>
   <script src="assets/js/app-config.js"></script>
   <script src="assets/js/teacher-invite-register.js"></script>
 </body>

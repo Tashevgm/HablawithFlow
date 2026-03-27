@@ -205,6 +205,11 @@ function showTeacherDashboard() {
 }
 
 async function getTeacherRoleForUser(userId) {
+  const {
+    data: { user }
+  } = await window.supabaseClient.auth.getUser();
+  const metadata = user && user.id === userId ? user.user_metadata || {} : {};
+
   const { data, error } = await window.supabaseClient
     .from("profiles")
     .select("role")
@@ -219,6 +224,34 @@ async function getTeacherRoleForUser(userId) {
   }
 
   if (!data || !data.role) {
+    if (String(metadata.role || "").toLowerCase() === "teacher") {
+      const profilePayload = {
+        id: userId,
+        full_name: metadata.full_name || user.email.split("@")[0],
+        role: "teacher",
+        timezone: metadata.timezone || "Europe/London",
+        notes: metadata.notes || "",
+        track: "Teacher",
+        goal: "Teach on Hablawithflow"
+      };
+
+      const teacherProfilePayload = {
+        id: userId,
+        bio: metadata.notes || null,
+        hourly_rate: metadata.hourly_rate ? Number(metadata.hourly_rate) : null,
+        timezone: metadata.timezone || "Europe/London"
+      };
+
+      const profileUpsert = await window.supabaseClient.from("profiles").upsert(profilePayload);
+      if (!profileUpsert.error) {
+        await window.supabaseClient.from("teacher_profiles").upsert(teacherProfilePayload);
+        return {
+          ok: true,
+          role: "teacher"
+        };
+      }
+    }
+
     return {
       ok: false,
       error: "This account has no teacher role yet. Ask admin to set role = teacher."

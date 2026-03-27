@@ -1,17 +1,3 @@
-const isLocalTeacherPortalOrigin =
-  window.location.origin.includes("127.0.0.1:5500") ||
-  window.location.origin.includes("localhost:5500") ||
-  window.location.origin.includes("127.0.0.1:8787") ||
-  window.location.origin.includes("localhost:8787");
-
-const configuredTeacherPortalApiBase =
-  window.HWF_APP_CONFIG && typeof window.HWF_APP_CONFIG.apiBase === "string"
-    ? window.HWF_APP_CONFIG.apiBase.trim()
-    : "";
-
-const TEACHER_PORTAL_API_BASE =
-  configuredTeacherPortalApiBase || (isLocalTeacherPortalOrigin ? "http://127.0.0.1:8787" : "");
-
 function byId(id) {
   return document.getElementById(id);
 }
@@ -25,6 +11,7 @@ function setGateMessage(message, type = "success") {
   if (!node) {
     return;
   }
+
   node.textContent = message;
   node.className = `booking-feedback ${type}`;
   node.hidden = false;
@@ -35,6 +22,7 @@ function setRegisterFeedback(message, type) {
   if (!node) {
     return;
   }
+
   node.textContent = message;
   node.className = `booking-feedback ${type}`;
   node.hidden = false;
@@ -45,62 +33,40 @@ function clearRegisterFeedback() {
   if (!node) {
     return;
   }
+
   node.hidden = true;
   node.textContent = "";
 }
 
-function showManualSetupLink(link) {
-  const wrap = byId("invite-manual-link-wrap");
-  const input = byId("invite-manual-setup-link");
-  if (!wrap || !input) {
-    return;
+async function createTeacherProfile(userId, payload) {
+  const profilePayload = {
+    id: userId,
+    full_name: payload.name,
+    role: "teacher",
+    timezone: payload.timezone || "Europe/London",
+    notes: payload.bio || "",
+    track: "Teacher",
+    goal: "Teach on Hablawithflow"
+  };
+
+  const teacherProfilePayload = {
+    id: userId,
+    bio: payload.bio || null,
+    hourly_rate: payload.hourlyRate || null,
+    timezone: payload.timezone || "Europe/London"
+  };
+
+  const profileResult = await window.supabaseClient.from("profiles").upsert(profilePayload);
+  if (profileResult.error) {
+    throw profileResult.error;
   }
 
-  if (!required(link)) {
-    wrap.hidden = true;
-    input.value = "";
-    return;
+  const teacherProfileResult = await window.supabaseClient
+    .from("teacher_profiles")
+    .upsert(teacherProfilePayload);
+  if (teacherProfileResult.error) {
+    throw teacherProfileResult.error;
   }
-
-  input.value = link;
-  wrap.hidden = false;
-}
-
-async function sendTeacherApiRequest(path, payload) {
-  if (!TEACHER_PORTAL_API_BASE) {
-    throw new Error("App backend is not configured for this page yet.");
-  }
-
-  const response = await fetch(`${TEACHER_PORTAL_API_BASE}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload || {})
-  });
-
-  const responseText = await response.text();
-  let data = null;
-  try {
-    data = responseText ? JSON.parse(responseText) : null;
-  } catch {
-    data = null;
-  }
-
-  if (!data) {
-    if (!response.ok) {
-      throw new Error(
-        `Backend returned non-JSON response (${response.status}). Check assets/js/app-config.js apiBase.`
-      );
-    }
-    throw new Error("Invalid server response.");
-  }
-
-  if (!response.ok || !data.ok) {
-    throw new Error(data.error || `Request failed with status ${response.status}.`);
-  }
-
-  return data;
 }
 
 function bindTeacherPortalForm() {
@@ -115,14 +81,20 @@ function bindTeacherPortalForm() {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     clearRegisterFeedback();
-    showManualSetupLink("");
+
+    if (!window.supabaseClient) {
+      setRegisterFeedback("Supabase auth is not configured.", "error");
+      return;
+    }
 
     const payload = {
       name: (byId("invite-name")?.value || "").trim(),
       email: (byId("invite-email")?.value || "").trim().toLowerCase(),
       timezone: (byId("invite-timezone")?.value || "").trim(),
       hourlyRate: (byId("invite-hourly-rate")?.value || "").trim(),
-      bio: (byId("invite-bio")?.value || "").trim()
+      bio: (byId("invite-bio")?.value || "").trim(),
+      password: byId("invite-password")?.value || "",
+      confirmPassword: byId("invite-password-confirm")?.value || ""
     };
 
     if (!required(payload.name) || !required(payload.email)) {
@@ -130,17 +102,53 @@ function bindTeacherPortalForm() {
       return;
     }
 
+    if (!payload.password || payload.password.length < 8) {
+      setRegisterFeedback("Please create a password with at least 8 characters.", "error");
+      return;
+    }
+
+    if (payload.password !== payload.confirmPassword) {
+      setRegisterFeedback("Your password confirmation does not match.", "error");
+      return;
+    }
+
     submit.disabled = true;
+
     try {
-      const result = await sendTeacherApiRequest("/api/teacher/register", payload);
-      setRegisterFeedback(result.message || "Teacher account updated.", "success");
-      showManualSetupLink(result.accountSetupUrl || "");
+      const { data, error } = await window.supabaseClient.auth.signUp({
+        email: payload.email,
+        password: payload.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/set-password.html`,
+          data: {
+            full_name: payload.name,
+            role: "teacher",
+            timezone: payload.timezone || "Europe/London",
+            notes: payload.bio || "",
+            hourly_rate: payload.hourlyRate || "",
+            source: "teacher_private_portal"
+          }
+        }
+      });
+
+      if (error) {
+        setRegisterFeedback(error.message, "error");
+        return;
+      }
+
+      if (data.user && data.session) {
+        await createTeacherProfile(data.user.id, payload);
+      }
 
       form.reset();
-      const timezoneField = byId("invite-timezone");
-      if (timezoneField) {
-        timezoneField.value = "Europe/London";
-      }
+      byId("invite-timezone").value = "Europe/London";
+
+      setRegisterFeedback(
+        data.session
+          ? "Registration complete. You can now sign in to the teacher portal with your email and password."
+          : "Registration submitted. Check your email to confirm your account, then sign in to the teacher portal.",
+        "success"
+      );
     } catch (error) {
       setRegisterFeedback(error.message || "Could not register teacher account.", "error");
     } finally {
