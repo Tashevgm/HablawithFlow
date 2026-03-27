@@ -79,10 +79,22 @@ async function sendTeacherApiRequest(path, payload) {
     body: JSON.stringify(payload || {})
   });
 
-  const data = await response.json().catch(() => ({
-    ok: false,
-    error: "Invalid server response."
-  }));
+  const responseText = await response.text();
+  let data = null;
+  try {
+    data = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    data = null;
+  }
+
+  if (!data) {
+    if (!response.ok) {
+      throw new Error(
+        `Backend returned non-JSON response (${response.status}). Check assets/js/app-config.js apiBase.`
+      );
+    }
+    throw new Error("Invalid server response.");
+  }
 
   if (!response.ok || !data.ok) {
     throw new Error(data.error || `Request failed with status ${response.status}.`);
