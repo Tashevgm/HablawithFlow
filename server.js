@@ -95,8 +95,29 @@ function readBearerToken(request) {
   return match ? match[1].trim() : "";
 }
 
-async function requireOwnerAccess(request, response) {
+async function requireAuthenticatedUser(request, response) {
   if (!ensureSupabaseAdmin(response)) {
+    return null;
+  }
+
+  const accessToken = readBearerToken(request);
+  if (!required(accessToken)) {
+    jsonError(response, 401, "Missing session token.");
+    return null;
+  }
+
+  const { data, error } = await supabaseAdmin.auth.getUser(accessToken);
+  if (error || !data?.user) {
+    jsonError(response, 401, "Invalid or expired session token.");
+    return null;
+  }
+
+  return data.user;
+}
+
+async function requireOwnerAccess(request, response) {
+  const user = await requireAuthenticatedUser(request, response);
+  if (!user) {
     return null;
   }
 
@@ -105,26 +126,14 @@ async function requireOwnerAccess(request, response) {
     return null;
   }
 
-  const accessToken = readBearerToken(request);
-  if (!required(accessToken)) {
-    jsonError(response, 401, "Missing owner session token.");
-    return null;
-  }
-
-  const { data, error } = await supabaseAdmin.auth.getUser(accessToken);
-  if (error || !data?.user) {
-    jsonError(response, 401, "Invalid or expired owner session token.");
-    return null;
-  }
-
-  const sessionEmail = (data.user.email || "").trim().toLowerCase();
+  const sessionEmail = (user.email || "").trim().toLowerCase();
   const normalizedOwnerEmail = ownerEmail.trim().toLowerCase();
   if (sessionEmail !== normalizedOwnerEmail) {
     jsonError(response, 403, "Owner access only.");
     return null;
   }
 
-  return data.user;
+  return user;
 }
 
 function bookingHtml({ studentName, date, time, lessonType, message, accountSetupUrl, isExistingStudent }) {
@@ -445,6 +454,146 @@ app.get("/api/health", (request, response) => {
     ok: true,
     service: "hablawithflow-app-backend"
   });
+});
+
+app.post("/api/booking/confirm-email-complete", async (request, response) => {
+  try {
+    const user = await requireAuthenticatedUser(request, response);
+    if (!user) {
+      return;
+    }
+
+    if (!user.email_confirmed_at) {
+      jsonError(response, 403, "Email is not confirmed yet.");
+      return;
+    }
+
+    if (!ensureEmailServer(response)) {
+      return;
+    }
+
+    const metadata = user.user_metadata || {};
+    const pendingBooking = metadata.pending_trial_booking || null;
+
+    if (!pendingBooking) {
+      response.json({
+        ok: true,
+        processed: false,
+        message: "No pending booking found for this account."
+      });
+      return;
+    }
+
+    const studentName = required(pendingBooking.student_name)
+      ? pendingBooking.student_name.trim()
+      : required(metadata.full_name)
+        ? metadata.full_name.trim()
+        : (user.email || "").split("@")[0];
+    const email = (user.email || "").trim().toLowerCase();
+    const date = required(pendingBooking.date) ? pendingBooking.date.trim() : "";
+    const time = required(pendingBooking.time) ? pendingBooking.time.trim() : "";
+    const lessonType = required(pendingBooking.lesson_type) ? pendingBooking.lesson_type.trim() : "";
+    const message = required(pendingBooking.message) ? pendingBooking.message.trim() : "";
+    const timezone = required(pendingBooking.timezone) ? pendingBooking.timezone.trim() : "Europe/London";
+
+    if (![studentName, email, date, time, lessonType].every(required)) {
+      jsonError(response, 400, "Pending booking metadata is incomplete.");
+      return;
+    }
+
+    const { data: existingRows, error: existingBookingError } = await supabaseAdmin
+      .from("bookings")
+      .select("id")
+      .eq("student_id", user.id)
+      .eq("lesson_date", date)
+      .eq("lesson_time", time)
+      .limit(1);
+
+    if (existingBookingError) {
+      throw existingBookingError;
+    }
+
+    const bookingExists = Array.isArray(existingRows) && existingRows.length > 0;
+
+    if (!bookingExists) {
+      const { error: insertBookingError } = await supabaseAdmin.from("bookings").insert({
+        student_id: user.id,
+        student_email: email,
+        student_name: studentName,
+        lesson_type: lessonType,
+        lesson_date: date,
+        lesson_time: time,
+        timezone,
+        message,
+        status: "confirmed"
+      });
+
+      if (insertBookingError) {
+        throw insertBookingError;
+      }
+    }
+
+    const sends = [
+      resend.emails.send({
+        from: emailFrom,
+        to: email,
+        subject: "Your Hablawithflow lesson is confirmed",
+        html: bookingHtml({
+          studentName,
+          date,
+          time,
+          lessonType,
+          message,
+          isExistingStudent: true
+        })
+      })
+    ];
+
+    if (required(ownerEmail)) {
+      sends.push(
+        resend.emails.send({
+          from: emailFrom,
+          to: ownerEmail,
+          subject: `Confirmed trial booking: ${studentName} on ${date} ${time}`,
+          html: `
+            <p><strong>Student:</strong> ${escapeHtml(studentName)}</p>
+            <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+            <p><strong>Date:</strong> ${escapeHtml(date)}</p>
+            <p><strong>Time:</strong> ${escapeHtml(time)}</p>
+            <p><strong>Lesson type:</strong> ${escapeHtml(lessonType)}</p>
+            <p><strong>Source:</strong> Email-confirmed landing booking flow</p>
+            <p><strong>Message:</strong> ${required(message) ? escapeHtml(message) : "No note added."}</p>
+          `
+        })
+      );
+    }
+
+    await Promise.all(sends);
+
+    const nextMetadata = {
+      ...metadata,
+      trial_booking_confirmation_sent_at: new Date().toISOString()
+    };
+    delete nextMetadata.pending_trial_booking;
+
+    const { error: metadataUpdateError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+      user_metadata: nextMetadata
+    });
+
+    if (metadataUpdateError) {
+      throw metadataUpdateError;
+    }
+
+    response.json({
+      ok: true,
+      processed: true,
+      bookingExists,
+      message: "Booking confirmation email sent after signup confirmation."
+    });
+  } catch (error) {
+    console.error("Failed to complete booking after confirmation", error);
+    jsonError(response, 500, "Failed to finalize booking after email confirmation.");
+  }
 });
 
 app.get("/api/owner/access", async (request, response) => {

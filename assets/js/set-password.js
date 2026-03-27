@@ -5,6 +5,33 @@ function setPasswordFeedback(message, type) {
   feedback.hidden = false;
 }
 
+let pendingBookingCompletionAttempted = false;
+
+async function completePendingBookingAfterConfirmation() {
+  if (pendingBookingCompletionAttempted || !window.HWFEmailApi || !window.supabaseClient) {
+    return;
+  }
+
+  const {
+    data: { session }
+  } = await window.supabaseClient.auth.getSession();
+
+  if (!session?.access_token) {
+    return;
+  }
+
+  pendingBookingCompletionAttempted = true;
+
+  try {
+    const result = await window.HWFEmailApi.completeConfirmedTrialBooking(session.access_token);
+    if (result && result.processed) {
+      setPasswordFeedback("Email confirmed. Your lesson confirmation email has been sent.", "success");
+    }
+  } catch {
+    pendingBookingCompletionAttempted = false;
+  }
+}
+
 function setFormEnabled(enabled) {
   document.getElementById("set-password-value").disabled = !enabled;
   document.getElementById("set-password-confirm").disabled = !enabled;
@@ -29,6 +56,7 @@ async function refreshPasswordSetupState() {
   status.textContent = "Your secure session is active. Set your password below.";
   emailInput.value = email;
   setFormEnabled(true);
+  await completePendingBookingAfterConfirmation();
   return session.user;
 }
 

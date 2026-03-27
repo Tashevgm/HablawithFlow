@@ -11,17 +11,20 @@ const configuredApiBase =
 
 const EMAIL_API_BASE = configuredApiBase || (isLocalOrigin ? "http://127.0.0.1:8787" : "");
 
-async function sendEmailRequest(path, payload) {
+async function sendEmailRequest(path, payload, options = {}) {
   if (!EMAIL_API_BASE) {
     throw new Error("Email backend is not configured for this site yet.");
   }
 
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+
   const response = await fetch(`${EMAIL_API_BASE}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
+    method: options.method || "POST",
+    headers,
+    body: payload ? JSON.stringify(payload) : undefined
   });
 
   const data = await response.json().catch(() => ({ ok: false, error: "Invalid email server response." }));
@@ -45,5 +48,16 @@ window.HWFEmailApi = {
   },
   sendTeacherInterestEmail(payload) {
     return sendEmailRequest("/api/email/teacher-interest", payload);
+  },
+  completeConfirmedTrialBooking(accessToken) {
+    return sendEmailRequest(
+      "/api/booking/confirm-email-complete",
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      }
+    );
   }
 };

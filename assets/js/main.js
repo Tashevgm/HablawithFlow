@@ -50,7 +50,7 @@ function isAlreadyRegisteredAuthError(message) {
   );
 }
 
-async function ensureBookingAccount({ studentName, email, password, lessonType, message }) {
+async function ensureBookingAccount({ studentName, email, password, lessonType, message, date, time }) {
   if (!window.supabaseClient) {
     return {
       ok: false,
@@ -74,17 +74,31 @@ async function ensureBookingAccount({ studentName, email, password, lessonType, 
     };
   }
 
+  const pendingTrialBooking = {
+    student_name: studentName,
+    email: normalizedEmail,
+    date,
+    time,
+    lesson_type: lessonType,
+    message: message || "",
+    timezone,
+    source: "landing_free_lesson",
+    created_at: new Date().toISOString()
+  };
+
   const { data, error } = await window.supabaseClient.auth.signUp({
     email: normalizedEmail,
     password,
     options: {
+      emailRedirectTo: `${window.location.origin}/set-password.html?flow=booking-confirmation`,
       data: {
         full_name: studentName,
         level: "Beginner",
         track: lessonType,
         timezone,
         goal: "Free trial lesson",
-        notes: message
+        notes: message,
+        pending_trial_booking: pendingTrialBooking
       }
     }
   });
@@ -106,6 +120,18 @@ async function ensureBookingAccount({ studentName, email, password, lessonType, 
   }
 
   const sessionActive = Boolean(data?.session);
+  const isLikelyExistingMaskedUser =
+    !sessionActive && Array.isArray(data?.user?.identities) && data.user.identities.length === 0;
+
+  if (isLikelyExistingMaskedUser) {
+    return {
+      ok: true,
+      created: false,
+      existingAccount: true,
+      sessionActive: false,
+      confirmationPending: false
+    };
+  }
 
   if (data?.user && sessionActive) {
     await window.supabaseClient.from("profiles").upsert({
@@ -152,6 +178,10 @@ async function saveServerBookingIfAuthenticated({ studentName, email, date, time
   }
 
   return { ok: true, skipped: false };
+}
+
+function isSlotStillAvailable(date, time) {
+  return window.HWFData.listAvailability().some((slot) => slot.date === date && slot.time === time);
 }
 
 function getInitials(name) {
@@ -579,12 +609,23 @@ function bindBookingForm() {
       return;
     }
 
+    if (!isSlotStillAvailable(date, time)) {
+      setBookingFeedback("That time slot is no longer available. Please pick another slot.", "error");
+      ensureBookingDefaults();
+      updateBookingSelectionUI();
+      renderBookingMonth();
+      renderBookingTimes();
+      return;
+    }
+
     const accountResult = await ensureBookingAccount({
       studentName,
       email,
       password,
       lessonType,
-      message
+      message,
+      date,
+      time
     });
 
     if (!accountResult.ok) {
@@ -645,26 +686,30 @@ function bindBookingForm() {
       serverMessage = " The booking saved locally, but the server copy could not be created yet.";
     }
 
-    try {
-      const emailResult = await window.HWFEmailApi.sendTrialBookingEmail({
-        studentName,
-        email,
-        date: result.booking.date,
-        time: result.booking.time,
-        lessonType,
-        message,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London"
-      });
+    if (accountResult.confirmationPending) {
+      emailMessage = " Please confirm your signup email first. Once confirmed, your lesson confirmation email will be sent automatically.";
+    } else {
+      try {
+        const emailResult = await window.HWFEmailApi.sendTrialBookingEmail({
+          studentName,
+          email,
+          date: result.booking.date,
+          time: result.booking.time,
+          lessonType,
+          message,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London"
+        });
 
-      if (emailResult.accountSetupSent) {
-        emailMessage = " We also emailed you a secure link to set your student portal password.";
-      } else if (emailResult.existingAccount) {
-        emailMessage = " A confirmation email has been sent, and you can log in with your existing student portal password.";
-      } else {
-        emailMessage = " A confirmation email has been sent.";
+        if (emailResult.accountSetupSent) {
+          emailMessage = " We also emailed you a secure link to set your student portal password.";
+        } else if (emailResult.existingAccount) {
+          emailMessage = " A confirmation email has been sent, and you can log in with your existing student portal password.";
+        } else {
+          emailMessage = " A confirmation email has been sent.";
+        }
+      } catch {
+        emailMessage = " The booking saved, but the confirmation email could not be sent yet.";
       }
-    } catch {
-      emailMessage = " The booking saved, but the confirmation email could not be sent yet.";
     }
 
     setBookingFeedback(
