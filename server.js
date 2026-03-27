@@ -533,6 +533,77 @@ app.post("/api/email/trial-booking", async (request, response) => {
   }
 });
 
+app.post("/api/email/teacher-interest", async (request, response) => {
+  if (!ensureEmailServer(response)) {
+    return;
+  }
+
+  const { name, email, message } = request.body || {};
+
+  if (![name, email, message].every(required)) {
+    jsonError(response, 400, "Missing teacher interest email fields.");
+    return;
+  }
+
+  try {
+    const sends = [];
+
+    if (required(ownerEmail)) {
+      sends.push(
+        resend.emails.send({
+          from: emailFrom,
+          to: ownerEmail,
+          subject: `Teacher application interest: ${name}`,
+          html: `
+            <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+            <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+            <p><strong>Message:</strong></p>
+            <p>${escapeHtml(message).replace(/\n/g, "<br>")}</p>
+          `
+        })
+      );
+    }
+
+    sends.push(
+      resend.emails.send({
+        from: emailFrom,
+        to: email,
+        subject: "We received your teacher application interest",
+        html: `
+          <div style="margin:0;padding:32px 16px;background:#f6f1ea;font-family:Arial,sans-serif;color:#1a1a1a;">
+            <div style="max-width:640px;margin:0 auto;background:#fffdf9;border:1px solid #eadfd7;border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,0.08);">
+              <div style="padding:18px 28px;background:linear-gradient(135deg,#c0392b 0%,#cf4c35 100%);color:#ffffff;">
+                <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700;opacity:0.86;">Teacher Interest</div>
+                <h1 style="margin:10px 0 0;font-size:28px;line-height:1.15;font-family:Georgia,serif;font-weight:700;">Gracias for reaching out</h1>
+              </div>
+              <div style="padding:32px 28px;">
+                <p style="margin:0 0 14px;font-size:18px;line-height:1.6;">Hi ${escapeHtml(name)},</p>
+                <p style="margin:0 0 18px;font-size:16px;line-height:1.7;color:#514741;">
+                  We received your message about becoming a teacher on Hablawithflow. We will review your details and get back to you if there is a fit.
+                </p>
+                <div style="padding:18px 20px;border-radius:18px;background:#fbf5ef;border:1px solid #efe1d5;">
+                  <div style="margin:0 0 8px;font-size:14px;font-weight:700;color:#8c5a47;">Your message</div>
+                  <p style="margin:0;font-size:15px;line-height:1.7;color:#514741;">${escapeHtml(message).replace(/\n/g, "<br>")}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        `
+      })
+    );
+
+    await Promise.all(sends);
+
+    response.json({
+      ok: true,
+      message: "Teacher interest email sent."
+    });
+  } catch (error) {
+    console.error("Failed to send teacher interest email", error);
+    jsonError(response, 500, "Failed to send teacher interest email.");
+  }
+});
+
 app.use(express.static(projectRoot));
 
 app.get("/", (request, response) => {

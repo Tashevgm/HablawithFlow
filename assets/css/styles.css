@@ -1406,6 +1406,33 @@ textarea {
   align-items: start;
 }
 
+.teacher-entry-grid {
+  position: relative;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+  align-items: stretch;
+}
+
+.teacher-entry-grid::before {
+  content: "";
+  position: absolute;
+  inset: -18px 10% auto 0;
+  height: 240px;
+  border-radius: 42px;
+  background:
+    radial-gradient(circle at top left, rgba(241, 196, 15, 0.2), transparent 38%),
+    radial-gradient(circle at bottom right, rgba(26, 188, 156, 0.12), transparent 32%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#teacher-entry-main,
+#teacher-entry-side {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+}
+
 .portal-column-stack {
   display: grid;
   gap: 24px;
@@ -1420,6 +1447,114 @@ textarea {
 
 .dashboard-card {
   padding: 28px;
+}
+
+.teacher-login-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+  padding: 34px;
+  background:
+    radial-gradient(circle at top right, rgba(241, 196, 15, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 245, 240, 0.92) 100%);
+}
+
+.teacher-login-card::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 8px;
+  background: linear-gradient(180deg, var(--red) 0%, #d46f4a 100%);
+}
+
+.teacher-login-intro {
+  margin-bottom: 24px;
+  padding: 0 0 18px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.teacher-entry-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #fff3cd;
+  color: #8a6200;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.teacher-login-intro h1 {
+  margin: 14px 0 10px;
+  font-family: "Playfair Display", serif;
+  font-size: clamp(2rem, 4vw, 3.1rem);
+  line-height: 0.98;
+}
+
+.teacher-entry-copy {
+  margin: 0;
+  max-width: 38ch;
+  color: #665f59;
+  font-size: 0.98rem;
+  line-height: 1.7;
+}
+
+.teacher-login-card h2 {
+  font-size: 1.9rem;
+}
+
+.teacher-login-note {
+  margin-top: auto;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: #fff7f2;
+  border: 1px solid rgba(192, 57, 43, 0.14);
+}
+
+.teacher-login-note span {
+  display: inline-block;
+  margin-bottom: 6px;
+  color: var(--red);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.teacher-login-note p {
+  margin: 0;
+  color: #6b5750;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.teacher-interest-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 34px;
+  background:
+    radial-gradient(circle at top left, rgba(26, 188, 156, 0.12), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 247, 243, 0.93) 100%);
+}
+
+.teacher-interest-copy {
+  margin: -4px 0 20px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(255, 248, 239, 0.95);
+  border: 1px solid rgba(241, 196, 15, 0.2);
+}
+
+.teacher-interest-copy p {
+  margin: 0;
+  color: #6d5f52;
+  font-size: 0.92rem;
+  line-height: 1.65;
 }
 
 .stat-card {

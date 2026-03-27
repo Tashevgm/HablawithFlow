@@ -46,12 +46,6 @@
       </div>
     </section>
 
-    <section class="teacher-page-nav" aria-label="Teacher sections">
-      <a href="admin.html" class="teacher-page-link">Calendar</a>
-      <a href="teacher-students.html" class="teacher-page-link active">Students</a>
-      <button class="teacher-page-link teacher-logout" id="teacher-logout" type="button">Log Out</button>
-    </section>
-
     <section class="portal-shell">
       <div class="auth-card" id="admin-login-card">
         <h2>Teacher Login</h2>
@@ -133,6 +127,10 @@
                 <h2>Student Progress Editor</h2>
                 <p class="portal-sub">Update tracks, lesson counts, focus areas, and coaching notes.</p>
               </div>
+              <div class="portal-shortcuts portal-shortcuts-tight">
+                <a href="admin.html" class="btn-outline">Open Calendar</a>
+                <button class="btn-outline portal-link" id="teacher-logout" type="button">Log Out</button>
+              </div>
             </div>
 
             <div class="form-group">
@@ -213,6 +211,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="assets/js/supabase-client.js"></script>
+  <script src="assets/js/app-config.js"></script>
+  <script src="assets/js/email-api.js"></script>
   <script src="assets/js/portal-data.js"></script>
   <script src="assets/js/admin-portal.js"></script>
 </body>

@@ -3,6 +3,7 @@ const CALENDAR_END_HOUR = 20;
 const CALENDAR_STEP_MINUTES = 60;
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const APPROVED_TEACHER_EMAILS = ["vtsagov@gmail.com"];
+const IS_TEACHER_STUDENTS_PAGE = window.location.pathname.endsWith("/teacher-students.html") || window.location.pathname.endsWith("teacher-students.html");
 
 let currentWeekStart = getStartOfWeek(new Date());
 let currentView = "week";
@@ -165,9 +166,14 @@ function ensureFocusedDate() {
 function showTeacherDashboard() {
   const loginCard = byId("admin-login-card");
   const dashboard = byId("admin-dashboard");
+  const teacherEntry = byId("teacher-entry");
 
   if (loginCard) {
     loginCard.hidden = true;
+  }
+
+  if (teacherEntry) {
+    teacherEntry.hidden = true;
   }
 
   if (dashboard) {
@@ -188,12 +194,18 @@ async function openTeacherDashboardFromSession() {
   } = await window.supabaseClient.auth.getUser();
 
   if (!user) {
+    if (IS_TEACHER_STUDENTS_PAGE) {
+      window.location.href = "admin.html";
+    }
     return false;
   }
 
   if (!isApprovedTeacherEmail(user.email)) {
     await window.supabaseClient.auth.signOut();
     showTeacherError("This email is not approved for teacher access.");
+    if (IS_TEACHER_STUDENTS_PAGE) {
+      window.location.href = "admin.html";
+    }
     return false;
   }
 
@@ -678,6 +690,51 @@ function bindTeacherAuth() {
   });
 }
 
+function setTeacherInterestFeedback(message, type) {
+  const feedback = byId("teacher-interest-feedback");
+
+  if (!feedback) {
+    return;
+  }
+
+  feedback.textContent = message;
+  feedback.className = `booking-feedback ${type}`;
+  feedback.hidden = false;
+}
+
+function bindTeacherInterestForm() {
+  const form = byId("teacher-interest-form");
+
+  if (!form) {
+    return;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const name = byId("teacher-interest-name").value.trim();
+    const email = byId("teacher-interest-email").value.trim();
+    const message = byId("teacher-interest-message").value.trim();
+
+    if (!name || !email || !message) {
+      setTeacherInterestFeedback("Please complete your name, email, and message.", "error");
+      return;
+    }
+
+    try {
+      await window.HWFEmailApi.sendTeacherInterestEmail({
+        name,
+        email,
+        message
+      });
+      form.reset();
+      setTeacherInterestFeedback("Your message was sent. We will review it and get back to you.", "success");
+    } catch {
+      setTeacherInterestFeedback("Your message could not be sent yet. Please try again shortly.", "error");
+    }
+  });
+}
+
 function bindCalendarControls() {
   if (!byId("calendar-prev")) {
     return;
@@ -854,6 +911,7 @@ function bindTeacherLogout() {
 async function initAdminPortal() {
   window.HWFData.ensurePortalState();
   bindTeacherAuth();
+  bindTeacherInterestForm();
   bindCalendarControls();
   bindViewSwitcher();
   bindBulkControls();

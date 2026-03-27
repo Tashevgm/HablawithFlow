@@ -42,5 +42,8 @@ window.HWFEmailApi = {
   },
   sendTrialBookingEmail(payload) {
     return sendEmailRequest("/api/email/trial-booking", payload);
+  },
+  sendTeacherInterestEmail(payload) {
+    return sendEmailRequest("/api/email/teacher-interest", payload);
   }
 };
