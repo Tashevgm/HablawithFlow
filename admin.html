@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teacher Portal | Hablawithflow</title>
+  <title>Teacher Calendar | Hablawithflow</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -29,89 +29,44 @@
 
   <main class="site-main portal-main">
     <section class="portal-shell">
-      <section class="portal-grid portal-grid-wide teacher-entry-grid" id="teacher-entry">
-        <div class="portal-column-stack" id="teacher-entry-main">
-          <article class="dashboard-card auth-card teacher-login-card" id="admin-login-card">
-            <div class="teacher-login-intro">
-              <span class="teacher-entry-badge">Teacher Portal</span>
-              <h1>Welcome back to your teaching space.</h1>
-              <p class="teacher-entry-copy">
-                Sign in with your teacher account email and password to open the calendar,
-                student progress tools, and booking overview. Access is controlled by your account role.
-              </p>
-            </div>
-
-            <h2>Teacher Login</h2>
-            <p class="section-sub portal-sub">
-              Sign in with your teacher account email and password to open the teacher dashboard.
-            </p>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="admin-email">Email</label>
-                <input type="email" id="admin-email" placeholder="teacher@email.com">
-              </div>
-              <div class="form-group">
-                <label for="admin-password">Password</label>
-                <input type="password" id="admin-password" placeholder="Enter your password">
-              </div>
-            </div>
-            <div class="auth-utility">
-              <button class="auth-link-btn" id="admin-forgot-password" type="button">Forgot password?</button>
-            </div>
-            <button class="btn-submit" id="admin-login" type="button">Open Dashboard</button>
-            <div class="form-error" id="admin-error" hidden></div>
-            <div class="booking-feedback" id="admin-login-feedback" hidden></div>
-
-            <div class="teacher-login-note">
-              <span>Private access</span>
-              <p>This area is reserved for teacher and admin role accounts. If you do not have access yet, use the contact form.</p>
-            </div>
-          </article>
-        </div>
-
-        <div class="portal-column-stack" id="teacher-entry-side">
-          <article class="dashboard-card teacher-interest-card">
-            <div class="card-heading">
-              <div>
-                <h2>Become a Teacher</h2>
-                <p class="portal-sub">If you want to teach on Hablawithflow, send your details here.</p>
-              </div>
-            </div>
-
-            <div class="teacher-interest-copy">
-              <p>
-                We are looking for teachers who care about rhythm, confidence, and real spoken connection,
-                not just textbook drills.
-              </p>
-            </div>
-
-            <form id="teacher-interest-form" class="booking-form">
-              <div class="form-group">
-                <label for="teacher-interest-name">Full Name</label>
-                <input type="text" id="teacher-interest-name" placeholder="Your name">
-              </div>
-
-              <div class="form-group">
-                <label for="teacher-interest-email">Email</label>
-                <input type="email" id="teacher-interest-email" placeholder="your@email.com">
-              </div>
-
-              <div class="form-group">
-                <label for="teacher-interest-message">Why do you want to teach with us?</label>
-                <textarea
-                  id="teacher-interest-message"
-                  placeholder="Tell us about your teaching background, languages, and why you want to join the platform."
-                ></textarea>
-              </div>
-
-              <button class="btn-submit" id="teacher-interest-submit" type="submit">Contact Us</button>
-              <div id="teacher-interest-feedback" class="booking-feedback" hidden></div>
-            </form>
-          </article>
-        </div>
-      </section>
-
       <div id="admin-dashboard" hidden>
+        <section class="portal-grid portal-grid-full">
+          <article class="dashboard-card teacher-dashboard-hero">
+            <div class="dashboard-hero-top">
+              <div>
+                <span class="section-kicker">Teacher Calendar</span>
+                <h1>Manage lessons, payments, and student flow.</h1>
+                <p class="portal-sub">
+                  Open teaching slots, monitor bookings, and confirm paid lessons before students
+                  are allowed to cancel.
+                </p>
+              </div>
+              <div class="portal-shortcuts portal-shortcuts-tight">
+                <a href="teacher-students.html" class="btn-outline">Student Performance</a>
+                <button class="btn-outline portal-link" id="teacher-logout" type="button">Log Out</button>
+              </div>
+            </div>
+
+            <div class="summary-pill-grid teacher-summary-pill-grid">
+              <article class="summary-pill accent-red">
+                <span>Payment rule</span>
+                <strong>Mark lessons paid first</strong>
+                <em>Only paid lessons can be cancelled by students.</em>
+              </article>
+              <article class="summary-pill accent-gold">
+                <span>Calendar workflow</span>
+                <strong>Open slots drive bookings</strong>
+                <em>Use week view for quick edits and bulk hours for recurring availability.</em>
+              </article>
+              <article class="summary-pill accent-teal">
+                <span>Student tracking</span>
+                <strong>Progress lives in one place</strong>
+                <em>Jump into the student performance page when you need learning details.</em>
+              </article>
+            </div>
+          </article>
+        </section>
+
         <section class="portal-grid portal-grid-top">
           <article class="dashboard-card stat-card">
             <span class="stat-kicker">Open slots</span>
@@ -119,9 +74,9 @@
             <span class="stat-caption">Time slots students can currently book</span>
           </article>
           <article class="dashboard-card stat-card">
-            <span class="stat-kicker">Confirmed bookings</span>
+            <span class="stat-kicker">Active bookings</span>
             <strong class="stat-number" id="stat-bookings">0</strong>
-            <span class="stat-caption">Upcoming sessions across all students</span>
+            <span class="stat-caption">Upcoming paid and awaiting-payment sessions</span>
           </article>
           <article class="dashboard-card stat-card">
             <span class="stat-kicker">Active students</span>
@@ -240,11 +195,7 @@
             <div class="card-heading">
               <div>
                 <h2>Upcoming Bookings</h2>
-                <p class="portal-sub">Confirmed lessons created from the booking flow.</p>
-              </div>
-              <div class="portal-shortcuts portal-shortcuts-tight">
-                <a href="teacher-students.html" class="btn-outline">Open Student Performance</a>
-                <button class="btn-outline portal-link" id="teacher-logout" type="button">Log Out</button>
+                <p class="portal-sub">Upcoming lessons, payment state, and student cancellations.</p>
               </div>
             </div>
             <div class="stack-list" id="booking-list"></div>
@@ -267,6 +218,7 @@
       </div>
       <div class="footer-col">
         <h4>Portal</h4>
+        <a href="teacher-login.html">Teacher Login</a>
         <a href="admin.html">Teacher Calendar</a>
         <a href="teacher-students.html">Student Performance</a>
       </div>

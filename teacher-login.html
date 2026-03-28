@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Login | Hablawithflow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html" class="nav-logo">Hablawithflow</a>
+      <div class="nav-links">
+        <a href="index.html#about">About</a>
+        <a href="index.html#plans">Lessons</a>
+        <a href="index.html#testimonials">Testimonials</a>
+        <a href="student-portal.html">Student Portal</a>
+        <a href="register.html">Register</a>
+        <a href="index.html#booking" class="btn-nav">Book Now</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="site-main portal-main">
+    <section class="portal-shell">
+      <section class="portal-grid portal-grid-wide teacher-entry-grid" id="teacher-entry">
+        <div class="portal-column-stack" id="teacher-entry-main">
+          <article class="dashboard-card auth-card teacher-login-card" id="admin-login-card">
+            <div class="teacher-login-intro">
+              <span class="teacher-entry-badge">Teacher Portal</span>
+              <h1>Sign in before opening the teaching dashboard.</h1>
+              <p class="teacher-entry-copy">
+                Use your teacher account first. After login, you will be sent to the calendar and
+                teaching tools.
+              </p>
+            </div>
+
+            <h2>Teacher Login</h2>
+            <p class="section-sub portal-sub">
+              Sign in with your teacher account email and password to open the teacher calendar.
+            </p>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="admin-email">Email</label>
+                <input type="email" id="admin-email" placeholder="teacher@email.com">
+              </div>
+              <div class="form-group">
+                <label for="admin-password">Password</label>
+                <input type="password" id="admin-password" placeholder="Enter your password">
+              </div>
+            </div>
+            <div class="auth-utility">
+              <button class="auth-link-btn" id="admin-forgot-password" type="button">Forgot password?</button>
+            </div>
+            <button class="btn-submit" id="admin-login" type="button">Open Teacher Calendar</button>
+            <div class="form-error" id="admin-error" hidden></div>
+            <div class="booking-feedback" id="admin-login-feedback" hidden></div>
+
+            <div class="teacher-login-note">
+              <span>Private access</span>
+              <p>This area is reserved for teacher and admin role accounts. If you do not have access yet, use the contact form.</p>
+            </div>
+          </article>
+        </div>
+
+        <div class="portal-column-stack" id="teacher-entry-side">
+          <article class="dashboard-card teacher-interest-card">
+            <div class="card-heading">
+              <div>
+                <h2>Become a Teacher</h2>
+                <p class="portal-sub">If you want to teach on Hablawithflow, send your details here.</p>
+              </div>
+            </div>
+
+            <div class="teacher-interest-copy">
+              <p>
+                We are looking for teachers who care about rhythm, confidence, and real spoken connection,
+                not just textbook drills.
+              </p>
+            </div>
+
+            <form id="teacher-interest-form" class="booking-form">
+              <div class="form-group">
+                <label for="teacher-interest-name">Full Name</label>
+                <input type="text" id="teacher-interest-name" placeholder="Your name">
+              </div>
+
+              <div class="form-group">
+                <label for="teacher-interest-email">Email</label>
+                <input type="email" id="teacher-interest-email" placeholder="your@email.com">
+              </div>
+
+              <div class="form-group">
+                <label for="teacher-interest-message">Why do you want to teach with us?</label>
+                <textarea
+                  id="teacher-interest-message"
+                  placeholder="Tell us about your teaching background, languages, and why you want to join the platform."
+                ></textarea>
+              </div>
+
+              <button class="btn-submit" id="teacher-interest-submit" type="submit">Contact Us</button>
+              <div id="teacher-interest-feedback" class="booking-feedback" hidden></div>
+            </form>
+          </article>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">Hablawithflow</div>
+        <p class="footer-desc">Teaching Spanish through rhythm, connection, and real-world conversation.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Navigate</h4>
+        <a href="index.html">Public Site</a>
+        <a href="student-portal.html">Student Portal</a>
+      </div>
+      <div class="footer-col">
+        <h4>Teacher</h4>
+        <a href="teacher-login.html">Teacher Login</a>
+        <a href="teacher-invite-register.html">Teacher Registration</a>
+      </div>
+    </div>
+    <div class="footer-bottom">&copy; 2026 Hablawithflow. All rights reserved.</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/js/supabase-client.js"></script>
+  <script src="assets/js/app-config.js"></script>
+  <script src="assets/js/email-api.js"></script>
+  <script src="assets/js/portal-data.js"></script>
+  <script src="assets/js/admin-portal.js"></script>
+</body>
+</html>

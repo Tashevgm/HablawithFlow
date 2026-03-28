@@ -2,6 +2,8 @@ const CALENDAR_START_HOUR = 8;
 const CALENDAR_END_HOUR = 20;
 const CALENDAR_STEP_MINUTES = 60;
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const IS_TEACHER_LOGIN_PAGE = window.location.pathname.endsWith("/teacher-login.html") || window.location.pathname.endsWith("teacher-login.html");
+const IS_TEACHER_CALENDAR_PAGE = window.location.pathname.endsWith("/admin.html") || window.location.pathname.endsWith("admin.html");
 const IS_TEACHER_STUDENTS_PAGE = window.location.pathname.endsWith("/teacher-students.html") || window.location.pathname.endsWith("teacher-students.html");
 const TEACHER_ROLES = new Set(["teacher", "admin"]);
 
@@ -9,6 +11,7 @@ let currentWeekStart = getStartOfWeek(new Date());
 let currentView = "week";
 let focusMonth = new Date();
 let focusedDate = "";
+window.HWFServerBookings = window.HWFServerBookings || [];
 
 function getPasswordResetRedirect() {
   return `${window.location.origin}/set-password.html`;
@@ -16,6 +19,40 @@ function getPasswordResetRedirect() {
 
 function byId(id) {
   return document.getElementById(id);
+}
+
+function buildTeacherLoginUrl() {
+  const currentPath = window.location.pathname.split("/").pop() || "admin.html";
+  const targetPath = currentPath === "teacher-login.html" ? "admin.html" : currentPath;
+  return `teacher-login.html?next=${encodeURIComponent(targetPath)}`;
+}
+
+function redirectToTeacherLogin() {
+  window.location.href = buildTeacherLoginUrl();
+}
+
+function getTeacherLoginNextTarget() {
+  const params = new URLSearchParams(window.location.search);
+  const next = params.get("next");
+  if (!next || next.includes("://") || next.startsWith("/")) {
+    return "admin.html";
+  }
+
+  return next;
+}
+
+function getBookingStatusMeta(status) {
+  if (window.HWFData && typeof window.HWFData.getBookingStatusMeta === "function") {
+    return window.HWFData.getBookingStatusMeta(status);
+  }
+
+  return {
+    value: String(status || "pending_payment"),
+    label: "Awaiting payment",
+    tone: "pending",
+    active: true,
+    canMarkPaid: false
+  };
 }
 
 function getStartOfWeek(date) {
@@ -114,6 +151,14 @@ function getStudents() {
   return window.HWFData.listStudents();
 }
 
+function formatStudentSummaryDate(date, time) {
+  if (!date || !time) {
+    return "No date set";
+  }
+
+  return `${formatPortalDate(date, time)} at ${time}`;
+}
+
 function getOpenSlot(date, time) {
   return getAvailability().find((slot) => slot.date === date && slot.time === time) || null;
 }
@@ -184,7 +229,69 @@ function ensureFocusedDate() {
   focusMonth = new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
-function showTeacherDashboard() {
+async function loadServerBookings() {
+  const { data, error } = await window.supabaseClient
+    .from("bookings")
+    .select("*")
+    .order("lesson_date", { ascending: true })
+    .order("lesson_time", { ascending: true });
+
+  if (error) {
+    window.HWFServerBookings = [];
+    return false;
+  }
+
+  window.HWFServerBookings = Array.isArray(data) ? data : [];
+  return true;
+}
+
+function setDashboardActionError(message) {
+  const error = byId("slot-error");
+  if (!error) {
+    return;
+  }
+
+  error.textContent = message;
+  error.hidden = false;
+}
+
+function clearDashboardActionError() {
+  const error = byId("slot-error");
+  if (!error) {
+    return;
+  }
+
+  error.textContent = "";
+  error.hidden = true;
+}
+
+async function markServerBookingPaid(bookingId) {
+  const existingBooking = getBookings().find((booking) => String(booking.id) === String(bookingId));
+
+  if (!existingBooking) {
+    return { ok: false, error: "This booking could not be found." };
+  }
+
+  const statusMeta = getBookingStatusMeta(existingBooking.status);
+  if (!statusMeta.canMarkPaid) {
+    return { ok: false, error: "Only unpaid bookings can be marked as paid." };
+  }
+
+  const { data, error } = await window.supabaseClient
+    .from("bookings")
+    .update({ status: "confirmed_paid" })
+    .eq("id", bookingId)
+    .select()
+    .single();
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true, booking: data };
+}
+
+async function showTeacherDashboard() {
   const loginCard = byId("admin-login-card");
   const dashboard = byId("admin-dashboard");
   const teacherEntry = byId("teacher-entry");
@@ -201,6 +308,7 @@ function showTeacherDashboard() {
     dashboard.hidden = false;
   }
 
+  await loadServerBookings();
   renderAdminDashboard();
 }
 
@@ -284,8 +392,8 @@ async function openTeacherDashboardFromSession() {
   } = await window.supabaseClient.auth.getUser();
 
   if (!user) {
-    if (IS_TEACHER_STUDENTS_PAGE) {
-      window.location.href = "admin.html";
+    if (IS_TEACHER_CALENDAR_PAGE || IS_TEACHER_STUDENTS_PAGE) {
+      redirectToTeacherLogin();
     }
     return false;
   }
@@ -293,15 +401,21 @@ async function openTeacherDashboardFromSession() {
   const roleResult = await getTeacherRoleForUser(user.id);
   if (!roleResult.ok) {
     await window.supabaseClient.auth.signOut();
-    showTeacherError(roleResult.error);
-    if (IS_TEACHER_STUDENTS_PAGE) {
-      window.location.href = "admin.html";
+    if (IS_TEACHER_LOGIN_PAGE) {
+      showTeacherError(roleResult.error);
+    } else {
+      redirectToTeacherLogin();
     }
     return false;
   }
 
+  if (IS_TEACHER_LOGIN_PAGE) {
+    window.location.href = getTeacherLoginNextTarget();
+    return true;
+  }
+
   clearTeacherError();
-  showTeacherDashboard();
+  await showTeacherDashboard();
   return true;
 }
 
@@ -354,13 +468,14 @@ function renderAdminStats() {
       )
     : 0;
   const upcomingCount = students.reduce((sum, student) => sum + student.upcomingLessons.length, 0);
+  const activeBookings = getBookings().filter((booking) => getBookingStatusMeta(booking.status).active);
 
   if (byId("stat-open-slots")) {
     byId("stat-open-slots").textContent = getAvailability().length;
   }
 
   if (byId("stat-bookings")) {
-    byId("stat-bookings").textContent = getBookings().length;
+    byId("stat-bookings").textContent = activeBookings.length;
   }
 
   if (byId("stat-students")) {
@@ -631,19 +746,54 @@ function renderBookings() {
 
   container.innerHTML = bookings
     .map((booking) => {
+      const statusMeta = getBookingStatusMeta(booking.status);
+      const paymentNote = statusMeta.value === "payment_submitted"
+        ? '<p class="list-card-note">Student completed checkout. Verify the payment, then mark this lesson as paid.</p>'
+        : statusMeta.canMarkPaid
+          ? '<p class="list-card-note warning">Students can cancel only after you mark this lesson as paid.</p>'
+          : statusMeta.value === "cancelled_paid"
+          ? '<p class="list-card-note warning">Cancelled by the student. Payment remains retained.</p>'
+          : "";
       return `
         <article class="list-card">
           <div class="list-card-top">
             <strong>${booking.studentName}</strong>
-            <span class="status-pill">${booking.lessonType}</span>
+            <span class="status-pill ${statusMeta.tone}">${statusMeta.label}</span>
           </div>
-          <p>${formatPortalDate(booking.date, booking.time)} at ${booking.time}</p>
+          <p>${formatPortalDate(booking.date, booking.time)} at ${booking.time} - ${booking.lessonType}</p>
           <span>${booking.email}</span>
           <p class="list-card-note">${booking.message || "No booking note added."}</p>
+          ${paymentNote}
+            ${
+              statusMeta.canMarkPaid
+                ? `<div class="list-card-actions">
+                  <button class="list-action pay booking-mark-paid" type="button" data-booking-id="${booking.id}">
+                    ${statusMeta.value === "payment_submitted" ? "Confirm Paid" : "Mark Paid"}
+                  </button>
+                </div>`
+                : ""
+            }
         </article>
       `;
     })
     .join("");
+
+  container.querySelectorAll(".booking-mark-paid").forEach((button) => {
+    button.addEventListener("click", async () => {
+      clearDashboardActionError();
+      button.disabled = true;
+
+      const result = await markServerBookingPaid(button.dataset.bookingId);
+      if (!result.ok) {
+        button.disabled = false;
+        setDashboardActionError(result.error);
+        return;
+      }
+
+      await loadServerBookings();
+      renderAdminDashboard();
+    });
+  });
 }
 
 function renderStudentSelect() {
@@ -683,6 +833,85 @@ function loadStudentIntoForm(studentId) {
   byId("student-milestone").value = student.nextMilestone;
   byId("student-focus").value = student.focusAreas.join(", ");
   byId("student-note").value = student.coachNote;
+  renderSelectedStudentDetail(student);
+}
+
+function renderSelectedStudentDetail(student) {
+  if (!byId("student-detail-name")) {
+    return;
+  }
+
+  if (!student) {
+    byId("student-detail-name").textContent = "Select a student";
+    byId("student-detail-track").textContent = "Choose a roster entry to load details.";
+    byId("student-detail-level").textContent = "No student selected";
+    byId("student-detail-progress").textContent = "0%";
+    byId("student-detail-progress-copy").textContent = "0 of 0 lessons completed";
+    byId("student-detail-streak").textContent = "0";
+    byId("student-detail-streak-copy").textContent = "No active learning streak yet.";
+    byId("student-detail-milestone").textContent = "No milestone loaded.";
+    byId("student-detail-focus").innerHTML = '<span class="focus-chip">No focus areas yet</span>';
+    byId("student-detail-upcoming").innerHTML = '<p class="empty-copy">No upcoming lessons loaded.</p>';
+    byId("student-detail-history").innerHTML = '<p class="empty-copy">No lesson history loaded.</p>';
+    byId("student-detail-note").textContent = "No note loaded.";
+    if (byId("open-student-profile")) {
+      byId("open-student-profile").href = "student-profile.html";
+    }
+    return;
+  }
+
+  const progressPercent = Math.round((student.completedLessons / Math.max(student.totalLessons, 1)) * 100);
+  const nextLesson = student.upcomingLessons && student.upcomingLessons.length ? student.upcomingLessons[0] : null;
+
+  byId("student-detail-name").textContent = student.name;
+  byId("student-detail-track").textContent = `${student.track} - ${student.email}`;
+  byId("student-detail-level").textContent = student.level;
+  byId("student-detail-level").className = "status-pill";
+  byId("student-detail-progress").textContent = `${progressPercent}%`;
+  byId("student-detail-progress-copy").textContent = `${student.completedLessons} of ${student.totalLessons} lessons completed`;
+  byId("student-detail-streak").textContent = String(student.streak);
+  byId("student-detail-streak-copy").textContent = student.streak
+    ? `${student.streak} consecutive study sessions recorded.`
+    : "No active learning streak yet.";
+  byId("student-detail-milestone").textContent = student.nextMilestone || "No milestone set yet.";
+  byId("student-detail-focus").innerHTML = (student.focusAreas && student.focusAreas.length
+    ? student.focusAreas
+    : ["No focus areas yet"])
+    .map((area) => `<span class="focus-chip">${area}</span>`)
+    .join("");
+  byId("student-detail-upcoming").innerHTML = nextLesson
+    ? student.upcomingLessons
+        .map((lesson) => {
+          return `
+            <article class="list-card">
+              <strong>${lesson.topic || student.track}</strong>
+              <p>${formatStudentSummaryDate(lesson.date, lesson.time)}</p>
+            </article>
+          `;
+        })
+        .join("")
+    : '<p class="empty-copy">No upcoming lessons booked.</p>';
+  byId("student-detail-history").innerHTML = student.lessonHistory && student.lessonHistory.length
+    ? student.lessonHistory
+        .map((lesson) => {
+          return `
+            <article class="list-card">
+              <strong>${lesson.topic || "Lesson"}</strong>
+              <p>${lesson.date ? new Date(`${lesson.date}T00:00:00`).toLocaleDateString("en-GB", {
+                month: "short",
+                day: "numeric",
+                year: "numeric"
+              }) : "Date not recorded"}</p>
+              <span>${lesson.status || "Completed"}</span>
+            </article>
+          `;
+        })
+        .join("")
+    : '<p class="empty-copy">No lesson history recorded yet.</p>';
+  byId("student-detail-note").textContent = student.coachNote || "No coaching note recorded yet.";
+  if (byId("open-student-profile")) {
+    byId("open-student-profile").href = `student-profile.html?id=${encodeURIComponent(student.id)}&email=${encodeURIComponent(student.email)}`;
+  }
 }
 
 function renderRoster() {
@@ -702,8 +931,9 @@ function renderRoster() {
   container.innerHTML = students
     .map((student) => {
       const percent = Math.round((student.completedLessons / Math.max(student.totalLessons, 1)) * 100);
+      const selectedId = byId("student-select") ? byId("student-select").value : "";
       return `
-        <article class="list-card">
+        <button class="list-card roster-card-button ${selectedId === student.id ? "active" : ""}" type="button" data-student-id="${student.id}">
           <div class="list-card-top">
             <strong>${student.name}</strong>
             <span class="status-pill">${student.level}</span>
@@ -718,13 +948,24 @@ function renderRoster() {
               <div class="progress-fill" style="width:${percent}%"></div>
             </div>
           </div>
-        </article>
+        </button>
       `;
     })
     .join("");
+
+  container.querySelectorAll(".roster-card-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (byId("student-select")) {
+        byId("student-select").value = button.dataset.studentId;
+      }
+      loadStudentIntoForm(button.dataset.studentId);
+      renderRoster();
+    });
+  });
 }
 
 function renderAdminDashboard() {
+  clearDashboardActionError();
   const students = getStudents();
   const select = byId("student-select");
   const currentStudentId = select && students.length ? (select.value || students[0].id) : "";
@@ -742,6 +983,8 @@ function renderAdminDashboard() {
 
   if (currentStudentId) {
     loadStudentIntoForm(currentStudentId);
+  } else {
+    renderSelectedStudentDetail(null);
   }
 }
 
@@ -775,7 +1018,7 @@ function bindTeacherAuth() {
       return;
     }
 
-    await openTeacherDashboardFromSession();
+    window.location.href = getTeacherLoginNextTarget();
   });
 
   if (forgotButton) {
@@ -1031,7 +1274,7 @@ function bindTeacherLogout() {
     if (window.supabaseClient) {
       await window.supabaseClient.auth.signOut();
     }
-    window.location.reload();
+    window.location.href = "teacher-login.html";
   });
 }
 

@@ -17,5 +17,7 @@ window.HWF_APP_CONFIG = {
       ? window.location.origin
       : isHablawithflowPublicDomain
         ? "https://hablawithflow-api.onrender.com"
-        : window.location.origin
+        : window.location.origin,
+  lessonPrice: 20,
+  currency: "GBP"
 };

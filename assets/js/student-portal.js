@@ -12,6 +12,20 @@ function getPasswordResetRedirect() {
   return `${window.location.origin}/set-password.html`;
 }
 
+function getBookingStatusMeta(status) {
+  if (window.HWFData && typeof window.HWFData.getBookingStatusMeta === "function") {
+    return window.HWFData.getBookingStatusMeta(status);
+  }
+
+  return {
+    value: String(status || "pending_payment"),
+    label: "Awaiting payment",
+    tone: "pending",
+    active: true,
+    canStudentCancel: false
+  };
+}
+
 function formatStudentDate(date, time) {
   return new Date(`${date}T${time}`).toLocaleDateString("en-GB", {
     weekday: "short",
@@ -142,7 +156,14 @@ async function openStudentDashboardFromSession() {
 
   const role = await getPortalRoleForUser(user);
   if (role === "teacher" || role === "admin") {
-    window.location.href = "admin.html";
+    currentStudent = null;
+    currentSupabaseUserId = "";
+    await window.supabaseClient.auth.signOut();
+    document.getElementById("student-dashboard").hidden = true;
+    document.getElementById("student-login-card").hidden = false;
+    document.getElementById("student-password").value = "";
+    document.getElementById("student-error").hidden = true;
+    setStudentLoginFeedback("Teacher accounts must sign in from the Teacher Login page.", "error");
     return;
   }
 
@@ -155,6 +176,7 @@ async function openStudentDashboardFromSession() {
   document.getElementById("student-login-card").hidden = true;
   document.getElementById("student-dashboard").hidden = false;
   renderStudentDashboard(hydratedStudent);
+  handleStripeCheckoutReturn();
 }
 
 async function listServerBookingsForCurrentStudent() {
@@ -178,6 +200,7 @@ async function listServerBookingsForCurrentStudent() {
 
 async function hydrateStudentFromServer(student) {
   const serverBookings = await listServerBookingsForCurrentStudent();
+  const firstFreeLessonBookingId = getFirstFreeLessonBookingId(serverBookings, student);
 
   if (!serverBookings.length) {
     return {
@@ -189,12 +212,30 @@ async function hydrateStudentFromServer(student) {
   return {
     ...student,
     upcomingLessons: serverBookings
-      .filter((booking) => booking.status === "confirmed")
-      .map((booking) => ({
-        date: booking.lesson_date,
-        time: booking.lesson_time.slice(0, 5),
-        topic: booking.lesson_type
-      }))
+      .map((booking) => {
+        const statusMeta = getBookingStatusMeta(booking.status);
+        const isFreeFirstLesson = String(booking.id) === firstFreeLessonBookingId;
+        return {
+          id: booking.id,
+          date: booking.lesson_date,
+          time: booking.lesson_time.slice(0, 5),
+          topic: booking.lesson_type,
+          status: isFreeFirstLesson ? "free_first_lesson" : statusMeta.value,
+          statusLabel: isFreeFirstLesson ? "Free first lesson" : statusMeta.label,
+          statusTone: isFreeFirstLesson ? "free" : statusMeta.tone,
+          canCancel: isFreeFirstLesson ? true : statusMeta.canStudentCancel,
+          canPayNow: !isFreeFirstLesson && statusMeta.value === "pending_payment",
+          isFreeFirstLesson,
+          statusNote: isFreeFirstLesson
+            ? "Congratulations. Your free first lesson is booked. No payment is required for this session."
+            : statusMeta.value === "payment_submitted"
+              ? "Checkout submitted. Your teacher will confirm the payment shortly."
+            : statusMeta.canStudentCancel
+              ? "If you cancel this paid lesson, the payment stays applied and is not refunded."
+              : "Use Pay Now to complete Stripe checkout. Cancellation unlocks after the payment is confirmed."
+        };
+      })
+      .filter((booking) => getBookingStatusMeta(booking.status).active)
   };
 }
 
@@ -214,8 +255,51 @@ async function saveServerBooking({ studentName, email, date, time, lessonType, m
       lesson_time: time,
       timezone: currentStudent && currentStudent.timezone ? currentStudent.timezone : "Europe/London",
       message,
-      status: "confirmed"
+      status: "pending_payment"
     })
+    .select()
+    .single();
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true, booking: data };
+}
+
+async function cancelServerBooking(bookingId) {
+  if (!currentSupabaseUserId) {
+    return { ok: false, error: "You must be signed in to cancel a lesson." };
+  }
+
+  const { data: existingBooking, error: existingError } = await window.supabaseClient
+    .from("bookings")
+    .select("id, status")
+    .eq("id", bookingId)
+    .eq("student_id", currentSupabaseUserId)
+    .maybeSingle();
+
+  if (existingError) {
+    return { ok: false, error: existingError.message };
+  }
+
+  if (!existingBooking) {
+    return { ok: false, error: "This booking could not be found." };
+  }
+
+  const statusMeta = getBookingStatusMeta(existingBooking.status);
+  const studentBookings = await listServerBookingsForCurrentStudent();
+  const isFreeFirstLesson = String(existingBooking.id) === getFirstFreeLessonBookingId(studentBookings, currentStudent);
+
+  if (!statusMeta.canStudentCancel && !isFreeFirstLesson) {
+    return { ok: false, error: "Only paid lessons can be cancelled." };
+  }
+
+  const { data, error } = await window.supabaseClient
+    .from("bookings")
+    .update({ status: "cancelled_paid" })
+    .eq("id", bookingId)
+    .eq("student_id", currentSupabaseUserId)
     .select()
     .single();
 
@@ -302,6 +386,105 @@ function setStudentLoginFeedback(message, type) {
   feedback.textContent = message;
   feedback.className = `booking-feedback ${type}`;
   feedback.hidden = false;
+}
+
+function getFunctionsBaseUrl() {
+  const supabaseBase =
+    typeof window.supabaseClient?.supabaseUrl === "string" && window.supabaseClient.supabaseUrl
+      ? window.supabaseClient.supabaseUrl
+      : "https://ubetwjpyookwdgtfppim.supabase.co";
+
+  return `${supabaseBase.replace(/\/+$/, "")}/functions/v1`;
+}
+
+async function createStripeCheckoutSession(bookingId) {
+  const {
+    data: { session }
+  } = await window.supabaseClient.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error("Your session expired. Please sign in again.");
+  }
+
+  const response = await fetch(`${getFunctionsBaseUrl()}/create-checkout-session`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify({
+      booking_id: bookingId
+    })
+  });
+
+  const data = await response.json().catch(() => ({
+    ok: false,
+    error: `Stripe checkout failed with status ${response.status}.`
+  }));
+
+  if (!response.ok || !data?.ok || !data?.url) {
+    throw new Error(data?.error || `Stripe checkout failed with status ${response.status}.`);
+  }
+
+  return data.url;
+}
+
+function handleStripeCheckoutReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const checkoutState = params.get("checkout");
+
+  if (!checkoutState) {
+    return;
+  }
+
+  if (checkoutState === "success") {
+    setStudentBookingFeedback(
+      "Stripe checkout completed. If the lesson status still looks unchanged, wait a few seconds for the webhook and refresh.",
+      "success"
+    );
+  } else if (checkoutState === "cancelled") {
+    setStudentBookingFeedback("Stripe checkout was cancelled. Your lesson is still waiting for payment.", "error");
+  }
+
+  params.delete("checkout");
+  params.delete("session_id");
+  const nextQuery = params.toString();
+  const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`;
+  window.history.replaceState({}, "", nextUrl);
+}
+
+function getFirstFreeLessonBookingId(bookings, student) {
+  if (Number(student?.completedLessons || 0) > 0) {
+    return "";
+  }
+
+  const activeBookings = bookings.filter((booking) => getBookingStatusMeta(booking.status).active);
+  return activeBookings.length ? String(activeBookings[0].id) : "";
+}
+
+function buildStudentCoachNote(student, nextLesson) {
+  const note = String(student.coachNote || "").trim();
+  const hasCompletedLesson = Number(student.completedLessons || 0) > 0;
+  const hasBookedLesson = Boolean(nextLesson);
+  const lowerNote = note.toLowerCase();
+  const isDefaultWelcomeNote =
+    !note ||
+    lowerNote.includes("your learning plan will start once you book your first lesson") ||
+    lowerNote.includes("your first lesson is booked and your learning plan will start from there");
+
+  if (!hasCompletedLesson && !hasBookedLesson) {
+    return "Your free first lesson is still available. Book your free lesson below so we can set your level and build your learning plan.";
+  }
+
+  if (!hasCompletedLesson && hasBookedLesson && isDefaultWelcomeNote) {
+    return "Congratulations. Your free first lesson is booked. Once you attend it, your teacher will set your level, focus areas, and personal learning plan.";
+  }
+
+  if (isDefaultWelcomeNote && hasCompletedLesson) {
+    return "Your teacher will keep updating your learning plan here as you complete more lessons.";
+  }
+
+  return note;
 }
 
 function renderStudentBookingCalendar() {
@@ -425,8 +608,32 @@ function renderStudentDashboard(student) {
   currentStudent = student;
 
   const progressPercent = Math.round((student.completedLessons / student.totalLessons) * 100);
+  const nextLesson = student.upcomingLessons.length ? student.upcomingLessons[0] : null;
+  const primaryFocus = student.focusAreas.length ? student.focusAreas[0] : student.track;
+  const summaryCaption = nextLesson
+    ? nextLesson.isFreeFirstLesson
+      ? `Congratulations. Your free first lesson is booked for ${formatStudentDate(nextLesson.date, nextLesson.time)} at ${nextLesson.time}.`
+      : `Your next lesson is ${formatStudentDate(nextLesson.date, nextLesson.time)} at ${nextLesson.time}.`
+    : "No lesson is booked yet. Choose your free first lesson below and get started.";
+  const paymentSummary = nextLesson
+    ? nextLesson.isFreeFirstLesson
+      ? "Free first lesson booked"
+      : nextLesson.statusLabel === "Paid"
+        ? "Paid and ready to attend"
+        : nextLesson.statusLabel === "Payment sent"
+          ? "Payment submitted for confirmation"
+          : "Ready to pay"
+    : "Your free first lesson is still available";
+  const nextLessonSummary = nextLesson
+    ? `${formatStudentDate(nextLesson.date, nextLesson.time)} at ${nextLesson.time}`
+    : "No lesson booked yet";
 
-  document.getElementById("student-name-heading").textContent = `Welcome back, ${student.name}`;
+  document.getElementById("student-dashboard-title").textContent = `Welcome back, ${student.name}`;
+  document.getElementById("student-summary-caption").textContent = summaryCaption;
+  document.getElementById("student-next-lesson-summary").textContent = nextLessonSummary;
+  document.getElementById("student-payment-summary").textContent = paymentSummary;
+  document.getElementById("student-focus-summary").textContent = primaryFocus;
+  document.getElementById("student-name-heading").textContent = "Progress Snapshot";
   document.getElementById("student-track-label").textContent = student.track;
   document.getElementById("student-level-label").textContent = `Level ${student.level}`;
   document.getElementById("student-progress-count").textContent = student.completedLessons;
@@ -435,7 +642,7 @@ function renderStudentDashboard(student) {
   document.getElementById("student-progress-percent").textContent = `${progressPercent}%`;
   document.getElementById("student-progress-bar").style.width = `${progressPercent}%`;
   document.getElementById("student-milestone").textContent = student.nextMilestone;
-  document.getElementById("student-note").textContent = student.coachNote;
+  document.getElementById("student-note").textContent = buildStudentCoachNote(student, nextLesson);
   document.getElementById("student-book-link").href = "#student-booking-section";
 
   document.getElementById("student-focus").innerHTML = student.focusAreas
@@ -452,13 +659,79 @@ function renderStudentDashboard(student) {
           <article class="list-card">
             <div class="list-card-top">
               <strong>${lesson.topic}</strong>
-              <span class="status-pill">Upcoming</span>
+              <span class="status-pill ${lesson.statusTone}">${lesson.statusLabel}</span>
             </div>
             <p>${formatStudentDate(lesson.date, lesson.time)} at ${lesson.time}</p>
+            <p class="list-card-note ${lesson.canCancel || lesson.canPayNow ? "" : "warning"}">${lesson.statusNote}</p>
+            ${lesson.canCancel || lesson.canPayNow
+              ? `<div class="list-card-actions">
+                  ${
+                    lesson.canPayNow
+                      ? `<button class="list-action pay student-pay-booking" type="button" data-booking-id="${lesson.id}">
+                          Pay Now
+                        </button>`
+                      : ""
+                  }
+                  ${
+                    lesson.canCancel
+                      ? `<button class="list-action danger student-cancel-booking" type="button" data-booking-id="${lesson.id}">
+                          Cancel Lesson
+                        </button>`
+                      : ""
+                  }
+                </div>`
+              : ""}
           </article>
         `;
       })
       .join("");
+
+    upcomingContainer.onclick = async (event) => {
+      const payButton = event.target.closest(".student-pay-booking");
+      if (payButton) {
+        payButton.disabled = true;
+        payButton.textContent = "Opening...";
+        setStudentBookingFeedback("Opening Stripe checkout...", "success");
+
+        try {
+          const checkoutUrl = await createStripeCheckoutSession(payButton.dataset.bookingId);
+          window.location.assign(checkoutUrl);
+        } catch (error) {
+          payButton.disabled = false;
+          payButton.textContent = "Pay Now";
+          setStudentBookingFeedback(error instanceof Error ? error.message : "Could not open Stripe checkout.", "error");
+        }
+        return;
+      }
+
+      const cancelButton = event.target.closest(".student-cancel-booking");
+      if (!cancelButton) {
+        return;
+      }
+
+      cancelButton.disabled = true;
+      const bookingId = cancelButton.dataset.bookingId;
+      const lesson = currentStudent && Array.isArray(currentStudent.upcomingLessons)
+        ? currentStudent.upcomingLessons.find((entry) => String(entry.id) === String(bookingId))
+        : null;
+
+      const result = await cancelServerBooking(bookingId);
+      if (!result.ok) {
+        cancelButton.disabled = false;
+        setStudentBookingFeedback(result.error, "error");
+        return;
+      }
+
+      setStudentBookingFeedback(
+        lesson && lesson.isFreeFirstLesson
+          ? "Free first lesson cancelled."
+          : "Lesson cancelled. The payment remains applied and is not refunded.",
+        "success"
+      );
+
+      const refreshedStudent = await hydrateStudentFromServer(currentStudent);
+      renderStudentDashboard(refreshedStudent);
+    };
   }
 
   document.getElementById("student-history").innerHTML = student.lessonHistory
@@ -515,13 +788,12 @@ function bindStudentBookingSection() {
       return;
     }
 
-    const result = window.HWFData.createBooking(bookingPayload);
+    const matchingSlot = window.HWFData
+      .listAvailability()
+      .find((slot) => slot.date === bookingPayload.date && slot.time === bookingPayload.time);
 
-    if (!result.ok) {
-      await window.supabaseClient.from("bookings").delete().eq("id", serverResult.booking.id);
-      setStudentBookingFeedback(result.error, "error");
-      renderStudentBookingSection();
-      return;
+    if (matchingSlot) {
+      window.HWFData.removeAvailabilitySlot(matchingSlot.id);
     }
 
     try {
@@ -538,13 +810,18 @@ function bindStudentBookingSection() {
     }
 
     document.getElementById("student-booking-message").value = "";
+    const refreshedStudent = await hydrateStudentFromServer(currentStudent);
+    renderStudentDashboard(refreshedStudent);
+    const bookedLesson = refreshedStudent.upcomingLessons.find((lesson) => {
+      return String(lesson.id) === String(serverResult.booking.id);
+    });
+
     setStudentBookingFeedback(
-      `Booked for ${formatStudentDate(result.booking.date, result.booking.time)} at ${result.booking.time}. Your class is now saved on the server.`,
+      bookedLesson && bookedLesson.isFreeFirstLesson
+        ? `Congratulations. Your free first lesson is booked for ${formatStudentDate(serverResult.booking.lesson_date, serverResult.booking.lesson_time)} at ${serverResult.booking.lesson_time.slice(0, 5)}.`
+        : `Booked for ${formatStudentDate(serverResult.booking.lesson_date, serverResult.booking.lesson_time)} at ${serverResult.booking.lesson_time.slice(0, 5)}. Use Pay Now in your upcoming lessons to open Stripe checkout.`,
       "success"
     );
-
-    const refreshedStudent = await hydrateStudentFromServer(window.HWFData.getStudentById(currentStudent.id));
-    renderStudentDashboard(refreshedStudent);
   });
 }
 

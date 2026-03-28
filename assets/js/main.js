@@ -170,7 +170,7 @@ async function saveServerBookingIfAuthenticated({ studentName, email, date, time
     lesson_time: time,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London",
     message,
-    status: "confirmed"
+    status: "pending_payment"
   });
 
   if (error) {
@@ -269,6 +269,33 @@ function renderAllReviews() {
   const reviews = allReviews();
   document.getElementById("reviews-grid").innerHTML = reviews.map(renderCard).join("");
   renderSummary(reviews);
+}
+
+function bindPlanSelectionButtons() {
+  const buttons = [...document.querySelectorAll(".plan-select-flow")];
+
+  if (!buttons.length) {
+    return;
+  }
+
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const lessonType = button.dataset.lesson;
+      const lessonSelect = document.getElementById("booking-lesson");
+      const bookingSection = document.getElementById("booking");
+
+      if (!lessonType || !lessonSelect || !bookingSection) {
+        return;
+      }
+
+      lessonSelect.value = lessonType;
+      bookingSection.scrollIntoView({ behavior: "smooth", block: "start" });
+
+      window.requestAnimationFrame(() => {
+        document.getElementById("booking-name")?.focus();
+      });
+    });
+  });
 }
 
 function formatDate(dateString) {
@@ -681,7 +708,7 @@ function bindBookingForm() {
     });
 
     if (serverResult.ok) {
-      serverMessage = " The class was also saved to your server-side student record.";
+      serverMessage = " The class was also saved to your server-side student record and is awaiting payment confirmation.";
     } else if (!serverResult.skipped) {
       serverMessage = " The booking saved locally, but the server copy could not be created yet.";
     }
@@ -714,8 +741,8 @@ function bindBookingForm() {
 
     setBookingFeedback(
       result.registration.created
-        ? `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}.${accountMessage}${serverMessage}${emailMessage}`
-        : `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. If you already registered, you can manage your lessons from the student portal.${accountMessage}${serverMessage}${emailMessage}`,
+        ? `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. This lesson is reserved and awaiting payment.${accountMessage}${serverMessage}${emailMessage}`
+        : `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. This lesson is reserved and awaiting payment. If you already registered, you can manage your lessons from the student portal.${accountMessage}${serverMessage}${emailMessage}`,
       "success"
     );
   });
@@ -727,6 +754,7 @@ function init() {
   }
 
   renderAllReviews();
+  bindPlanSelectionButtons();
 
   if (window.HWFData) {
     bindBookingForm();

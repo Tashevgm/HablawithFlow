@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Profile | Hablawithflow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html" class="nav-logo">Hablawithflow</a>
+      <div class="nav-links">
+        <a href="index.html#about">About</a>
+        <a href="index.html#plans">Lessons</a>
+        <a href="index.html#testimonials">Testimonials</a>
+        <a href="student-portal.html">Student Portal</a>
+        <a href="register.html">Register</a>
+        <a href="index.html#booking" class="btn-nav">Book Now</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="site-main portal-main">
+    <section class="portal-shell">
+      <div id="student-profile-dashboard" hidden>
+        <section class="portal-grid portal-grid-full">
+          <article class="dashboard-card teacher-dashboard-hero">
+            <div class="dashboard-hero-top">
+              <div>
+                <span class="section-kicker">Student Profile</span>
+                <h1 id="student-profile-name">Student Profile</h1>
+                <p class="portal-sub" id="student-profile-subtitle">
+                  Individual learning plan, lesson tracking, and homework management.
+                </p>
+              </div>
+              <div class="portal-shortcuts portal-shortcuts-tight">
+                <a href="teacher-students.html" class="btn-outline">Back To Students</a>
+                <a href="admin.html" class="btn-outline">Open Calendar</a>
+                <button class="btn-outline portal-link" id="teacher-logout" type="button">Log Out</button>
+              </div>
+            </div>
+
+            <div class="summary-pill-grid">
+              <article class="summary-pill accent-red">
+                <span>Progress</span>
+                <strong id="student-profile-progress">0%</strong>
+                <em id="student-profile-progress-copy">0 of 0 planned lessons completed.</em>
+              </article>
+              <article class="summary-pill accent-gold">
+                <span>Current track</span>
+                <strong id="student-profile-track">Not set</strong>
+                <em id="student-profile-level">Level not set</em>
+              </article>
+              <article class="summary-pill accent-teal">
+                <span>Current focus</span>
+                <strong id="student-profile-focus-summary">No focus areas yet</strong>
+                <em id="student-profile-next-lesson">No upcoming lesson recorded.</em>
+              </article>
+            </div>
+          </article>
+        </section>
+
+        <section class="portal-grid portal-grid-wide">
+          <div class="portal-column-stack">
+            <article class="dashboard-card">
+              <div class="card-heading">
+                <div>
+                  <h2>Student Snapshot</h2>
+                  <p class="portal-sub">Quick context before you update the teaching plan.</p>
+                </div>
+              </div>
+
+              <div class="student-detail-shell">
+                <div class="student-detail-top">
+                  <div>
+                    <h3 id="student-profile-detail-name">Student</h3>
+                    <p class="portal-sub" id="student-profile-email">student@email.com</p>
+                  </div>
+                  <span class="status-pill" id="student-profile-level-pill">Beginner</span>
+                </div>
+
+                <article class="list-card detail-highlight-card">
+                  <strong>Coach Note</strong>
+                  <p id="student-profile-note">No coaching note recorded yet.</p>
+                </article>
+
+                <div>
+                  <h3 class="portal-subheading">Focus Areas</h3>
+                  <div class="chip-row" id="student-profile-focus"></div>
+                </div>
+
+                <div>
+                  <h3 class="portal-subheading">Upcoming Lessons</h3>
+                  <div class="stack-list compact-stack" id="student-profile-upcoming"></div>
+                </div>
+              </div>
+            </article>
+
+            <article class="dashboard-card">
+              <div class="card-heading">
+                <div>
+                  <h2>Lesson Tracker</h2>
+                  <p class="portal-sub">Add an entry for each lesson so progress is tied to real sessions.</p>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="lesson-log-date">Lesson Date</label>
+                  <input type="date" id="lesson-log-date">
+                </div>
+                <div class="form-group">
+                  <label for="lesson-log-topic">Topic</label>
+                  <input type="text" id="lesson-log-topic" placeholder="Conversation practice">
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="lesson-log-duration">Duration (minutes)</label>
+                  <input type="number" id="lesson-log-duration" min="15" step="15" value="60">
+                </div>
+                <div class="form-group">
+                  <label for="lesson-log-outcome">Outcome</label>
+                  <input type="text" id="lesson-log-outcome" placeholder="Improved fluency on past tense">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="lesson-log-homework">Homework Given</label>
+                <textarea id="lesson-log-homework" placeholder="Describe the assigned homework or speaking task."></textarea>
+              </div>
+
+              <div class="form-group">
+                <label for="lesson-log-notes">Teacher Notes</label>
+                <textarea id="lesson-log-notes" placeholder="Add teaching notes for this lesson."></textarea>
+              </div>
+
+              <button class="btn-submit" id="save-lesson-log" type="button">Add Lesson Record</button>
+              <div id="lesson-log-feedback" class="booking-feedback" hidden></div>
+
+              <div class="stack-list top-spaced" id="lesson-log-list"></div>
+            </article>
+          </div>
+
+          <div class="portal-column-stack">
+            <article class="dashboard-card">
+              <div class="card-heading">
+                <div>
+                  <h2>Individual Learning Plan</h2>
+                  <p class="portal-sub">Keep one live teaching plan for this student.</p>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="plan-title">Plan Title</label>
+                <input type="text" id="plan-title" placeholder="Spring speaking confidence plan">
+              </div>
+
+              <div class="form-group">
+                <label for="plan-long-goal">Long-Term Goal</label>
+                <input type="text" id="plan-long-goal" placeholder="Speak confidently in 1-on-1 meetings">
+              </div>
+
+              <div class="form-group">
+                <label for="plan-weekly-focus">Weekly Focus</label>
+                <textarea id="plan-weekly-focus" placeholder="What the student should focus on this week."></textarea>
+              </div>
+
+              <div class="form-group">
+                <label for="plan-objectives">Objectives</label>
+                <textarea id="plan-objectives" placeholder="One objective per line."></textarea>
+              </div>
+
+              <div class="form-group">
+                <label for="plan-notes">Teacher Plan Notes</label>
+                <textarea id="plan-notes" placeholder="Plan notes, pacing notes, confidence blockers, pronunciation targets."></textarea>
+              </div>
+
+              <button class="btn-submit" id="save-student-plan" type="button">Save Learning Plan</button>
+              <div id="student-plan-feedback" class="booking-feedback" hidden></div>
+            </article>
+
+            <article class="dashboard-card">
+              <div class="card-heading">
+                <div>
+                  <h2>Homework Files</h2>
+                  <p class="portal-sub">Upload Word files and attach clear homework notes.</p>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="homework-title">Homework Title</label>
+                <input type="text" id="homework-title" placeholder="Week 3 speaking prompts">
+              </div>
+
+              <div class="form-group">
+                <label for="homework-notes">Homework Notes</label>
+                <textarea id="homework-notes" placeholder="Explain what the student should do with this file."></textarea>
+              </div>
+
+              <div class="form-group">
+                <label for="homework-file">Word File</label>
+                <input
+                  type="file"
+                  id="homework-file"
+                  accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                >
+              </div>
+
+              <button class="btn-submit" id="upload-homework" type="button">Upload Homework File</button>
+              <div id="homework-feedback" class="booking-feedback" hidden></div>
+
+              <div class="stack-list top-spaced" id="homework-file-list"></div>
+            </article>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">Hablawithflow</div>
+        <p class="footer-desc">Teaching Spanish through rhythm, connection, and real-world conversation.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Teacher</h4>
+        <a href="teacher-login.html">Teacher Login</a>
+        <a href="admin.html">Teacher Calendar</a>
+        <a href="teacher-students.html">Student Performance</a>
+      </div>
+      <div class="footer-col">
+        <h4>Student</h4>
+        <a href="student-portal.html">Student Portal</a>
+        <a href="register.html">Register</a>
+      </div>
+    </div>
+    <div class="footer-bottom">&copy; 2026 Hablawithflow. All rights reserved.</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/js/supabase-client.js"></script>
+  <script src="assets/js/app-config.js"></script>
+  <script src="assets/js/portal-data.js"></script>
+  <script src="assets/js/student-profile.js"></script>
+</body>
+</html>

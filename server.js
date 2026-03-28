@@ -730,7 +730,7 @@ app.post("/api/booking/confirm-email-complete", async (request, response) => {
         lesson_time: time,
         timezone,
         message,
-        status: "confirmed"
+        status: "pending_payment"
       });
 
       if (insertBookingError) {

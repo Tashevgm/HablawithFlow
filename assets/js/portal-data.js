@@ -62,6 +62,116 @@ function normalizeTimeToHour(time) {
   return `${hours}:00`;
 }
 
+function normalizeBookingStatus(status) {
+  const rawStatus = String(status || "").trim().toLowerCase();
+
+  if (!rawStatus) {
+    return "pending_payment";
+  }
+
+  if (rawStatus === "confirmed" || rawStatus === "paid" || rawStatus === "confirmed_paid") {
+    return "confirmed_paid";
+  }
+
+  if (
+    rawStatus === "pending" ||
+    rawStatus === "awaiting_payment" ||
+    rawStatus === "awaiting payment" ||
+    rawStatus === "unpaid" ||
+    rawStatus === "pending_payment"
+  ) {
+    return "pending_payment";
+  }
+
+  if (
+    rawStatus === "payment_submitted" ||
+    rawStatus === "payment submitted" ||
+    rawStatus === "checkout_submitted"
+  ) {
+    return "payment_submitted";
+  }
+
+  if (
+    rawStatus === "cancelled" ||
+    rawStatus === "canceled" ||
+    rawStatus === "cancelled_paid" ||
+    rawStatus === "canceled_paid"
+  ) {
+    return "cancelled_paid";
+  }
+
+  return rawStatus;
+}
+
+function getBookingStatusMeta(status) {
+  const value = normalizeBookingStatus(status);
+
+  if (value === "confirmed_paid") {
+    return {
+      value,
+      label: "Paid",
+      tone: "paid",
+      active: true,
+      canStudentCancel: true,
+      canMarkPaid: false
+    };
+  }
+
+  if (value === "cancelled_paid") {
+    return {
+      value,
+      label: "Cancelled",
+      tone: "cancelled",
+      active: false,
+      canStudentCancel: false,
+      canMarkPaid: false
+    };
+  }
+
+  if (value === "payment_submitted") {
+    return {
+      value,
+      label: "Payment sent",
+      tone: "submitted",
+      active: true,
+      canStudentCancel: false,
+      canMarkPaid: true
+    };
+  }
+
+  return {
+    value: "pending_payment",
+    label: "Ready to pay",
+    tone: "pending",
+    active: true,
+    canStudentCancel: false,
+    canMarkPaid: true
+  };
+}
+
+function normalizeBookingRecord(booking) {
+  const date = booking.date || booking.lesson_date || "";
+  const rawTime = booking.time || booking.lesson_time || "";
+  return {
+    ...booking,
+    date,
+    time: typeof rawTime === "string" ? rawTime.slice(0, 5) : normalizeTimeToHour(rawTime),
+    studentName: booking.studentName || booking.student_name || "",
+    lessonType: booking.lessonType || booking.lesson_type || "",
+    message: booking.message || "",
+    email: normalizeEmail(booking.email || booking.student_email || ""),
+    status: normalizeBookingStatus(booking.status)
+  };
+}
+
+function getAuthoritativeBookings() {
+  if (Array.isArray(window.HWFServerBookings)) {
+    return window.HWFServerBookings.map(normalizeBookingRecord);
+  }
+
+  return readPortalState().bookings.map(normalizeBookingRecord);
+}
+
 function normalizeStudent(student) {
   return {
     ...student,
@@ -259,7 +369,7 @@ function listAvailability() {
 }
 
 function listBookings() {
-  return sortByDateTime(readPortalState().bookings);
+  return sortByDateTime(getAuthoritativeBookings());
 }
 
 function listStudents() {
@@ -396,7 +506,7 @@ function addAvailabilitySlot(slot) {
   const date = slot.date;
   const time = normalizeTimeToHour(slot.time);
 
-  const hasBooking = state.bookings.some((entry) => entry.date === date && entry.time === time);
+  const hasBooking = getAuthoritativeBookings().some((entry) => entry.date === date && entry.time === time);
   if (hasBooking) {
     return { ok: false, error: "That time is already booked." };
   }
@@ -420,12 +530,13 @@ function addAvailabilitySlots(slots) {
   const state = readPortalState();
   let added = 0;
   let skipped = 0;
+  const authoritativeBookings = getAuthoritativeBookings();
 
   slots.forEach((slot) => {
     const date = slot.date;
     const time = normalizeTimeToHour(slot.time);
 
-    const hasBooking = state.bookings.some((entry) => entry.date === date && entry.time === time);
+    const hasBooking = authoritativeBookings.some((entry) => entry.date === date && entry.time === time);
     const duplicate = state.availability.some((entry) => entry.date === date && entry.time === time);
 
     if (hasBooking || duplicate) {
@@ -483,7 +594,7 @@ function createBooking(booking) {
     time: booking.time,
     lessonType: booking.lessonType,
     message: booking.message,
-    status: "confirmed"
+    status: "pending_payment"
   };
 
   state.bookings.push(savedBooking);
@@ -577,6 +688,8 @@ window.HWFData = {
   listAvailability,
   listBookings,
   listStudents,
+  normalizeBookingStatus,
+  getBookingStatusMeta,
   getTeacherAccessCode,
   getStudentById,
   getStudentByCredentials,

@@ -47,29 +47,6 @@
     </section>
 
     <section class="portal-shell">
-      <div class="auth-card" id="admin-login-card">
-        <h2>Teacher Login</h2>
-        <p class="section-sub portal-sub">
-          Sign in with your teacher account email and password to open the student performance dashboard.
-        </p>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="admin-email">Email</label>
-            <input type="email" id="admin-email" placeholder="teacher@email.com">
-          </div>
-          <div class="form-group">
-            <label for="admin-password">Password</label>
-            <input type="password" id="admin-password" placeholder="Enter your password">
-          </div>
-        </div>
-        <div class="auth-utility">
-          <button class="auth-link-btn" id="admin-forgot-password" type="button">Forgot password?</button>
-        </div>
-        <button class="btn-submit" id="admin-login" type="button">Open Dashboard</button>
-        <div class="form-error" id="admin-error" hidden></div>
-        <div class="booking-feedback" id="admin-login-feedback" hidden></div>
-      </div>
-
       <div id="admin-dashboard" hidden>
         <section class="portal-grid portal-grid-top">
           <article class="dashboard-card stat-card">
@@ -104,22 +81,60 @@
             <article class="dashboard-card">
               <div class="card-heading">
                 <div>
-                  <h2>Progress Notes</h2>
-                  <p class="portal-sub">A clean summary of what this page is for.</p>
+                  <h2>Selected Student</h2>
+                  <p class="portal-sub">Individual performance, lesson flow, and teaching context.</p>
                 </div>
               </div>
-              <div class="stack-list">
-                <article class="list-card">
-                  <strong>Update milestones</strong>
-                  <p>Keep the next speaking goal visible for every student.</p>
+              <div class="student-detail-shell" id="student-detail-shell">
+                <div class="student-detail-top">
+                  <div>
+                    <h3 id="student-detail-name">Select a student</h3>
+                    <p class="portal-sub" id="student-detail-track">Choose a roster entry to load details.</p>
+                  </div>
+                  <span class="status-pill muted" id="student-detail-level">No student selected</span>
+                </div>
+
+                <div class="portal-shortcuts portal-shortcuts-tight">
+                  <a class="btn-outline" id="open-student-profile" href="student-profile.html">Open Full Profile</a>
+                </div>
+
+                <div class="student-detail-stats">
+                  <article class="summary-pill accent-red">
+                    <span>Progress</span>
+                    <strong id="student-detail-progress">0%</strong>
+                    <em id="student-detail-progress-copy">0 of 0 lessons completed</em>
+                  </article>
+                  <article class="summary-pill accent-gold">
+                    <span>Streak</span>
+                    <strong id="student-detail-streak">0</strong>
+                    <em id="student-detail-streak-copy">No active learning streak yet.</em>
+                  </article>
+                </div>
+
+                <article class="list-card detail-highlight-card">
+                  <strong>Next milestone</strong>
+                  <p id="student-detail-milestone">No milestone loaded.</p>
                 </article>
-                <article class="list-card">
-                  <strong>Track consistency</strong>
-                  <p>Lesson counts and streaks stay separate from the calendar workflow.</p>
-                </article>
-                <article class="list-card">
-                  <strong>Write better coaching notes</strong>
-                  <p>Use the editor to save feedback students can then see inside their own portal.</p>
+
+                <div>
+                  <h4 class="portal-subheading">Focus Areas</h4>
+                  <div class="chip-row" id="student-detail-focus"></div>
+                </div>
+
+                <div class="student-detail-split">
+                  <div>
+                    <h4 class="portal-subheading">Upcoming Lessons</h4>
+                    <div class="stack-list compact-stack" id="student-detail-upcoming"></div>
+                  </div>
+                  <div>
+                    <h4 class="portal-subheading">Lesson History</h4>
+                    <div class="stack-list compact-stack" id="student-detail-history"></div>
+                  </div>
+                </div>
+
+                <article class="list-card detail-highlight-card">
+                  <strong>Coach Note</strong>
+                  <p id="student-detail-note">No note loaded.</p>
                 </article>
               </div>
             </article>
@@ -206,6 +221,7 @@
       </div>
       <div class="footer-col">
         <h4>Portal</h4>
+        <a href="teacher-login.html">Teacher Login</a>
         <a href="admin.html">Teacher Calendar</a>
         <a href="teacher-students.html">Student Performance</a>
       </div>

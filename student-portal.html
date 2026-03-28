@@ -73,6 +73,42 @@
       </div>
 
       <div id="student-dashboard" hidden>
+        <section class="portal-grid portal-grid-full">
+          <article class="dashboard-card student-dashboard-hero">
+            <div class="dashboard-hero-top">
+              <div>
+                <span class="section-kicker">Student Space</span>
+                <h2 id="student-dashboard-title">Your dashboard</h2>
+                <p class="portal-sub" id="student-summary-caption">
+                  Track your lessons, payment status, and next learning step from one place.
+                </p>
+              </div>
+              <div class="portal-shortcuts portal-shortcuts-tight">
+                <a href="index.html#booking" class="btn-outline portal-link" id="student-book-link">Book a Lesson</a>
+                <button class="btn-outline portal-link" id="student-logout" type="button">Log Out</button>
+              </div>
+            </div>
+
+            <div class="summary-pill-grid">
+              <article class="summary-pill accent-red">
+                <span>Next lesson</span>
+                <strong id="student-next-lesson-summary">No lesson booked yet</strong>
+                <em>Choose a slot below when you are ready.</em>
+              </article>
+              <article class="summary-pill accent-gold">
+                <span>Booking status</span>
+                <strong id="student-payment-summary">Waiting for your next booking</strong>
+                <em>Pay directly from your upcoming lessons when a booked class needs payment.</em>
+              </article>
+              <article class="summary-pill accent-teal">
+                <span>Main focus</span>
+                <strong id="student-focus-summary">Conversation</strong>
+                <em>Your current learning direction.</em>
+              </article>
+            </div>
+          </article>
+        </section>
+
         <section class="portal-grid portal-grid-top">
           <article class="dashboard-card stat-card">
             <span class="stat-kicker">Current track</span>
@@ -95,12 +131,8 @@
           <article class="dashboard-card">
             <div class="card-heading">
               <div>
-                <h2 id="student-name-heading">Welcome back</h2>
+                <h2 id="student-name-heading">Progress Snapshot</h2>
                 <p class="portal-sub">Your lesson momentum and next milestone.</p>
-              </div>
-              <div class="portal-shortcuts portal-shortcuts-tight">
-                <a href="index.html#booking" class="btn-outline portal-link" id="student-book-link">Book a Lesson</a>
-                <button class="btn-outline portal-link" id="student-logout" type="button">Log Out</button>
               </div>
             </div>
 
@@ -129,7 +161,7 @@
             <div class="card-heading">
               <div>
                 <h2>Upcoming Lessons</h2>
-                <p class="portal-sub">Any confirmed sessions from the teacher calendar appear here.</p>
+                <p class="portal-sub">Booked lessons and their current status appear here.</p>
               </div>
             </div>
             <div class="stack-list" id="student-upcoming"></div>
@@ -261,7 +293,7 @@
       <div class="footer-col">
         <h4>Navigate</h4>
         <a href="index.html">Public Site</a>
-        <a href="admin.html">Teacher Portal</a>
+        <a href="teacher-login.html">Teacher Login</a>
       </div>
       <div class="footer-col">
         <h4>Student Access</h4>
