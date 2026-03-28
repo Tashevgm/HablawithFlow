@@ -124,7 +124,7 @@ function createStudentProfile(details, students) {
   const focusArea = goalToFocusArea(details.goal);
   const coachNote = details.message
     ? `Welcome to Hablawithflow. Your note has been saved: "${details.message}".`
-    : "Welcome to Hablawithflow. Your first lesson is booked and your learning plan will start from there.";
+    : "Welcome to Hablawithflow. Your learning plan will start once you book your first lesson.";
 
   return {
     id: buildId("student"),

@@ -115,12 +115,34 @@ async function loadSupabaseProfile(user) {
   };
 }
 
+async function getPortalRoleForUser(user) {
+  const metadataRole = String(user.user_metadata?.role || "").toLowerCase();
+
+  const { data, error } = await window.supabaseClient
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    return metadataRole;
+  }
+
+  return String(data?.role || metadataRole || "student").toLowerCase();
+}
+
 async function openStudentDashboardFromSession() {
   const {
     data: { user }
   } = await window.supabaseClient.auth.getUser();
 
   if (!user) {
+    return;
+  }
+
+  const role = await getPortalRoleForUser(user);
+  if (role === "teacher" || role === "admin") {
+    window.location.href = "admin.html";
     return;
   }
 
@@ -158,7 +180,10 @@ async function hydrateStudentFromServer(student) {
   const serverBookings = await listServerBookingsForCurrentStudent();
 
   if (!serverBookings.length) {
-    return student;
+    return {
+      ...student,
+      upcomingLessons: []
+    };
   }
 
   return {
