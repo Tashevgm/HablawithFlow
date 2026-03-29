@@ -36,6 +36,9 @@ function bindRegisterForm() {
       timezone: document.getElementById("reg-timezone").value,
       goal: document.getElementById("reg-goal").value,
       message: document.getElementById("reg-message").value.trim(),
+      legalConsent: document.getElementById("reg-legal-consent").checked,
+      marketingEmailOptIn: document.getElementById("reg-marketing-consent").checked,
+      legalAcceptedAt: new Date().toISOString(),
       submittedAt: new Date().toISOString()
     };
 
@@ -54,6 +57,11 @@ function bindRegisterForm() {
       return;
     }
 
+    if (!registration.legalConsent) {
+      setRegisterFeedback("Please accept the Privacy Policy and Terms before creating your account.", "error");
+      return;
+    }
+
     const { data, error } = await window.supabaseClient.auth.signUp({
       email: registration.email,
       password: registration.password,
@@ -64,7 +72,11 @@ function bindRegisterForm() {
           track: registration.track,
           timezone: registration.timezone || "other",
           goal: registration.goal,
-          notes: registration.message
+          notes: registration.message,
+          terms_accepted_at: registration.legalAcceptedAt,
+          privacy_accepted_at: registration.legalAcceptedAt,
+          marketing_email_opt_in: Boolean(registration.marketingEmailOptIn),
+          marketing_email_opt_in_at: registration.marketingEmailOptIn ? registration.legalAcceptedAt : ""
         }
       }
     });

@@ -13,6 +13,7 @@ const port = Number(process.env.PORT || 8787);
 const resendApiKey = process.env.RESEND_API_KEY;
 const emailFrom = process.env.EMAIL_FROM || "Hablawithflow <onboarding@resend.dev>";
 const ownerEmail = process.env.OWNER_EMAIL || "";
+const bookingTeacherEmails = process.env.BOOKING_TEACHER_EMAILS || "";
 const teacherInviteToken = process.env.TEACHER_INVITE_TOKEN || "";
 const publicSiteUrl = process.env.PUBLIC_SITE_URL || "https://hablawithflow.com";
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -103,6 +104,19 @@ function formatLessonDate(date) {
 
 function toPortalUrl(pathname) {
   return `${publicSiteUrl.replace(/\/$/, "")}${pathname}`;
+}
+
+function listBookingNotificationRecipients() {
+  const rawRecipients = bookingTeacherEmails
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (required(ownerEmail)) {
+    rawRecipients.push(ownerEmail.trim().toLowerCase());
+  }
+
+  return [...new Set(rawRecipients)];
 }
 
 function readBearerToken(request) {
@@ -230,6 +244,122 @@ function bookingHtml({ studentName, date, time, lessonType, message, accountSetu
       </div>
     </div>
   `;
+}
+
+function teacherBookingHtml({ studentName, email, date, time, lessonType, message, heading, source }) {
+  const safeHeading = escapeHtml(heading || "A new lesson has been booked");
+  const safeSource = escapeHtml(source || "Website booking flow");
+  const safeMessage = required(message) ? escapeHtml(message).replace(/\n/g, "<br>") : "No note added.";
+
+  return `
+    <div style="margin:0;padding:32px 16px;background:#f6f1ea;font-family:Arial,sans-serif;color:#1a1a1a;">
+      <div style="max-width:640px;margin:0 auto;background:#fffdf9;border:1px solid #eadfd7;border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,0.08);">
+        <div style="padding:18px 28px;background:linear-gradient(135deg,#0f766e 0%,#159a8c 100%);color:#ffffff;">
+          <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700;opacity:0.86;">Teacher Notification</div>
+          <h1 style="margin:10px 0 0;font-size:30px;line-height:1.15;font-family:Georgia,serif;font-weight:700;">${safeHeading}</h1>
+        </div>
+
+        <div style="padding:32px 28px;">
+          <div style="margin:0 0 24px;padding:20px;border-radius:18px;background:#fbf5ef;border:1px solid #efe1d5;">
+            <div style="margin:0 0 14px;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;color:#8c5a47;">
+              Booking details
+            </div>
+            <table role="presentation" style="width:100%;border-collapse:collapse;">
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Student</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${escapeHtml(studentName)}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Email</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${escapeHtml(email)}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Date</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${escapeHtml(formatLessonDate(date))}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Time</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${escapeHtml(time)}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Lesson type</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${escapeHtml(lessonType)}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Source</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${safeSource}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="margin:0;padding:18px 20px;border-radius:18px;background:#eaf7f4;border:1px solid #bfe7dc;">
+            <div style="margin:0 0 8px;font-size:14px;font-weight:700;color:#116d5a;">Student note</div>
+            <p style="margin:0;font-size:15px;line-height:1.7;color:#36504b;">${safeMessage}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function sendBookingEmails({
+  studentName,
+  email,
+  date,
+  time,
+  lessonType,
+  message,
+  accountSetupUrl,
+  isExistingStudent,
+  studentSubject,
+  teacherSubject,
+  teacherHeading,
+  source
+}) {
+  const sends = [
+    resend.emails.send({
+      from: emailFrom,
+      to: email,
+      subject: studentSubject || "Your Hablawithflow lesson is confirmed",
+      html: bookingHtml({
+        studentName,
+        date,
+        time,
+        lessonType,
+        message,
+        accountSetupUrl,
+        isExistingStudent
+      })
+    })
+  ];
+
+  const teacherRecipients = listBookingNotificationRecipients();
+  if (teacherRecipients.length) {
+    sends.push(
+      resend.emails.send({
+        from: emailFrom,
+        to: teacherRecipients,
+        subject: teacherSubject || `New booking: ${studentName} on ${date} ${time}`,
+        html: teacherBookingHtml({
+          studentName,
+          email,
+          date,
+          time,
+          lessonType,
+          message,
+          heading: teacherHeading,
+          source
+        })
+      })
+    );
+  }
+
+  await Promise.all(sends);
+
+  return {
+    teacherNotificationSent: teacherRecipients.length > 0,
+    teacherRecipients
+  };
 }
 
 function teacherInviteHtml({ teacherName, accountSetupUrl }) {
@@ -738,42 +868,19 @@ app.post("/api/booking/confirm-email-complete", async (request, response) => {
       }
     }
 
-    const sends = [
-      resend.emails.send({
-        from: emailFrom,
-        to: email,
-        subject: "Your Hablawithflow lesson is confirmed",
-        html: bookingHtml({
-          studentName,
-          date,
-          time,
-          lessonType,
-          message,
-          isExistingStudent: true
-        })
-      })
-    ];
-
-    if (required(ownerEmail)) {
-      sends.push(
-        resend.emails.send({
-          from: emailFrom,
-          to: ownerEmail,
-          subject: `Confirmed trial booking: ${studentName} on ${date} ${time}`,
-          html: `
-            <p><strong>Student:</strong> ${escapeHtml(studentName)}</p>
-            <p><strong>Email:</strong> ${escapeHtml(email)}</p>
-            <p><strong>Date:</strong> ${escapeHtml(date)}</p>
-            <p><strong>Time:</strong> ${escapeHtml(time)}</p>
-            <p><strong>Lesson type:</strong> ${escapeHtml(lessonType)}</p>
-            <p><strong>Source:</strong> Email-confirmed landing booking flow</p>
-            <p><strong>Message:</strong> ${required(message) ? escapeHtml(message) : "No note added."}</p>
-          `
-        })
-      );
-    }
-
-    await Promise.all(sends);
+    await sendBookingEmails({
+      studentName,
+      email,
+      date,
+      time,
+      lessonType,
+      message,
+      isExistingStudent: true,
+      studentSubject: "Your Hablawithflow lesson is confirmed",
+      teacherSubject: `Confirmed trial booking: ${studentName} on ${date} ${time}`,
+      teacherHeading: "A confirmed free trial lesson has been booked",
+      source: "Email-confirmed landing booking flow"
+    });
 
     const nextMetadata = {
       ...metadata,
@@ -1003,40 +1110,19 @@ app.post("/api/email/booking", async (request, response) => {
   }
 
   try {
-    const sends = [
-      resend.emails.send({
-        from: emailFrom,
-        to: email,
-        subject: "Your Hablawithflow lesson is confirmed",
-        html: bookingHtml({
-          studentName,
-          date,
-          time,
-          lessonType,
-          message: required(message) ? message : ""
-        })
-      })
-    ];
-
-    if (required(ownerEmail)) {
-      sends.push(
-        resend.emails.send({
-          from: emailFrom,
-          to: ownerEmail,
-          subject: `New booking: ${studentName} on ${date} ${time}`,
-          html: `
-            <p><strong>Student:</strong> ${studentName}</p>
-            <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Date:</strong> ${date}</p>
-            <p><strong>Time:</strong> ${time}</p>
-            <p><strong>Lesson type:</strong> ${lessonType}</p>
-            <p><strong>Message:</strong> ${required(message) ? message : "No note added."}</p>
-          `
-        })
-      );
-    }
-
-    await Promise.all(sends);
+    await sendBookingEmails({
+      studentName,
+      email,
+      date,
+      time,
+      lessonType,
+      message: required(message) ? message : "",
+      isExistingStudent: true,
+      studentSubject: "Your Hablawithflow lesson is confirmed",
+      teacherSubject: `New booking: ${studentName} on ${date} ${time}`,
+      teacherHeading: "A lesson has been booked",
+      source: "Student portal booking flow"
+    });
 
     response.json({
       ok: true,
@@ -1079,47 +1165,24 @@ app.post("/api/email/trial-booking", async (request, response) => {
       inviteOutcome.accountSetupSent = Boolean(inviteOutcome.accountSetupUrl);
     }
 
-    const sends = [
-      resend.emails.send({
-        from: emailFrom,
-        to: email,
-        subject: inviteOutcome.existingUser
-          ? "Your Hablawithflow free trial is confirmed"
-          : "Your free trial is confirmed | Set your Hablawithflow password",
-        html: bookingHtml({
-          studentName,
-          date,
-          time,
-          lessonType,
-          message: required(message) ? message : "",
-          accountSetupUrl: inviteOutcome.accountSetupUrl,
-          isExistingStudent: inviteOutcome.existingUser
-        })
-      })
-    ];
-
-    if (required(ownerEmail)) {
-      sends.push(
-        resend.emails.send({
-          from: emailFrom,
-          to: ownerEmail,
-          subject: `New trial booking: ${studentName} on ${date} ${time}`,
-          html: `
-            <p><strong>Student:</strong> ${escapeHtml(studentName)}</p>
-            <p><strong>Email:</strong> ${escapeHtml(email)}</p>
-            <p><strong>Date:</strong> ${escapeHtml(date)}</p>
-            <p><strong>Time:</strong> ${escapeHtml(time)}</p>
-            <p><strong>Lesson type:</strong> ${escapeHtml(lessonType)}</p>
-            <p><strong>Account flow:</strong> ${
-              inviteOutcome.existingUser ? "Existing student account" : "New password setup link sent"
-            }</p>
-            <p><strong>Message:</strong> ${required(message) ? escapeHtml(message) : "No note added."}</p>
-          `
-        })
-      );
-    }
-
-    await Promise.all(sends);
+    await sendBookingEmails({
+      studentName,
+      email,
+      date,
+      time,
+      lessonType,
+      message: required(message) ? message : "",
+      accountSetupUrl: inviteOutcome.accountSetupUrl,
+      isExistingStudent: inviteOutcome.existingUser,
+      studentSubject: inviteOutcome.existingUser
+        ? "Your Hablawithflow free trial is confirmed"
+        : "Your free trial is confirmed | Set your Hablawithflow password",
+      teacherSubject: `New trial booking: ${studentName} on ${date} ${time}`,
+      teacherHeading: "A free trial lesson has been booked",
+      source: inviteOutcome.existingUser
+        ? "Landing page booking flow for existing student"
+        : "Landing page booking flow for new student"
+    });
 
     response.json({
       ok: true,

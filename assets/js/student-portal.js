@@ -687,14 +687,25 @@ function renderStudentDashboard(student) {
       .join("");
 
     upcomingContainer.onclick = async (event) => {
-      const payButton = event.target.closest(".student-pay-booking");
+      const eventTarget = event.target instanceof Element ? event.target : null;
+      if (!eventTarget) {
+        return;
+      }
+
+      const payButton = eventTarget.closest(".student-pay-booking");
       if (payButton) {
+        const bookingId = String(payButton.dataset.bookingId || "").trim();
+        if (!bookingId) {
+          setStudentBookingFeedback("This lesson is missing its payment reference. Refresh the page and try again.", "error");
+          return;
+        }
+
         payButton.disabled = true;
         payButton.textContent = "Opening...";
         setStudentBookingFeedback("Opening Stripe checkout...", "success");
 
         try {
-          const checkoutUrl = await createStripeCheckoutSession(payButton.dataset.bookingId);
+          const checkoutUrl = await createStripeCheckoutSession(bookingId);
           window.location.assign(checkoutUrl);
         } catch (error) {
           payButton.disabled = false;
@@ -704,7 +715,7 @@ function renderStudentDashboard(student) {
         return;
       }
 
-      const cancelButton = event.target.closest(".student-cancel-booking");
+      const cancelButton = eventTarget.closest(".student-cancel-booking");
       if (!cancelButton) {
         return;
       }

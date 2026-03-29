@@ -35,7 +35,7 @@
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-content">
         <p class="hero-badge">Master the Language</p>
-        <h1 id="hero-title">Speak Spanish with <em>rhythm</em>, clarity, and confidence.</h1>
+        <h1 id="hero-title">Speak Spanish with <em>Flow</em> and Confidence.</h1>
         <p class="hero-copy">
           Break free from textbooks. Learn to navigate the streets of Madrid or close business
           deals in Mexico City with natural fluency.
@@ -56,25 +56,30 @@
     </section>
 
     <section class="about" id="about" aria-labelledby="about-title">
-      <div class="about-images" aria-hidden="true">
+      <div class="about-images about-images-single" aria-hidden="true">
         <div class="about-img about-img-large">
-          <div class="img-placeholder">Tutor</div>
-        </div>
-        <div class="about-img about-img-small">
-          <div class="img-placeholder">Cafe</div>
+          <img src="assets/images/Mexico.jpeg" alt="" class="about-photo">
         </div>
       </div>
 
       <div class="about-content">
         <h2 id="about-title">Hola, I'm Vlad.</h2>
         <p>
-          I believe language is the pulse of culture. As a Spanish tutor fluent in both Spanish and
-          English, I help students bridge the gap between classroom grammar and real-world flow.
+          I started learning Spanish from zero after a trip to Latin America that completely changed
+          my perspective on life.
         </p>
         <p>
-          My method focuses on <strong>conversational fluency</strong> and
-          <strong>travel-ready Spanish</strong>. Whether you are ordering tapas in Seville or
-          preparing for a meeting in Barcelona, I build practical confidence.
+          What began as curiosity turned into a journey toward real fluency, built through travel,
+          immersion, and consistent practice across Latin America and Spain.
+        </p>
+        <p>
+          Today, I help students move beyond textbook Spanish and develop the ability to think,
+          speak, and connect naturally.
+        </p>
+        <p>
+          My approach is centered on <strong>conversational mastery</strong>,
+          <strong>practical communication</strong>, and building confidence in real-world
+          situations, so you are not just learning Spanish, you are living it.
         </p>
         <div class="about-badges" aria-label="Highlights">
           <div class="badge-item">
@@ -83,14 +88,14 @@
                 d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
               ></path>
             </svg>
-            <span>Certified Expert</span>
+            <span>Latin America + Spain</span>
           </div>
           <div class="badge-item">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="10"></circle>
               <path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"></path>
             </svg>
-            <span>Native-level Fluency</span>
+            <span>Conversation First</span>
           </div>
         </div>
       </div>
@@ -139,7 +144,7 @@
           <div class="big-stars" aria-label="Average rating: 5 out of 5">
             <span class="star">&#9733;</span><span class="star">&#9733;</span><span class="star">&#9733;</span><span class="star">&#9733;</span><span class="star">&#9733;</span>
           </div>
-          <div class="review-count" id="review-count">2 reviews</div>
+          <div class="review-count" id="review-count">3 reviews</div>
         </div>
         <div class="summary-divider" aria-hidden="true"></div>
         <div class="summary-bars" id="summary-bars"></div>
@@ -213,6 +218,27 @@
             <div class="form-group">
               <label for="booking-message">Message</label>
               <textarea id="booking-message" placeholder="Tell me about your Spanish goals..."></textarea>
+            </div>
+
+            <div class="consent-stack">
+              <label class="checkbox-row" for="booking-legal-consent">
+                <input type="checkbox" id="booking-legal-consent">
+                <span>
+                  <strong>Required:</strong> I have read the <a href="privacy-policy.html">Privacy Policy</a> and
+                  <a href="terms.html">Terms of Service</a>, and I agree to Hablawithflow using my details to create and
+                  manage my account and lesson bookings.
+                </span>
+              </label>
+              <label class="checkbox-row" for="booking-marketing-consent">
+                <input type="checkbox" id="booking-marketing-consent">
+                <span>
+                  I want to receive lesson updates, offers, and email marketing from Hablawithflow. This is optional and I can
+                  unsubscribe at any time.
+                </span>
+              </label>
+              <p class="checkbox-note">
+                Cookie preferences for analytics and marketing are managed separately through the cookie settings tool.
+              </p>
             </div>
 
             <button class="btn-submit" type="submit">Send Booking Request</button>
@@ -292,6 +318,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="assets/js/supabase-client.js"></script>
   <script src="assets/js/app-config.js"></script>
+  <script src="assets/js/legal-consent.js"></script>
   <script src="assets/js/email-api.js"></script>
   <script src="assets/js/portal-data.js"></script>
   <script src="assets/js/main.js"></script>

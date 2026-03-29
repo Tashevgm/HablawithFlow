@@ -298,6 +298,9 @@ function upsertRegistrationFromBooking(booking, student) {
     timezone: "other",
     goal: student && student.focusAreas.length ? student.focusAreas[0] : "Conversation",
     message: booking.message,
+    marketingEmailOptIn: Boolean(booking.marketingEmailOptIn),
+    termsAcceptedAt: booking.termsAcceptedAt || "",
+    privacyAcceptedAt: booking.privacyAcceptedAt || "",
     source: "booking",
     accessCode: student ? student.accessCode : ""
   });
@@ -485,6 +488,9 @@ function registerStudent(registration) {
     timezone: registration.timezone || "other",
     goal: registration.goal,
     message: registration.message,
+    marketingEmailOptIn: Boolean(registration.marketingEmailOptIn),
+    termsAcceptedAt: registration.legalAcceptedAt || "",
+    privacyAcceptedAt: registration.legalAcceptedAt || "",
     source: "register",
     accessCode: student.accessCode
   });

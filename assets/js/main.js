@@ -1,19 +1,27 @@
 const SEED_REVIEWS = [
   {
-    name: "Sarah Johnson",
-    role: "Marketing Executive",
-    lesson: "1-on-1",
+    name: "Grace",
+    lessonCount: 19,
+    reviewDate: "Jan 6, 2026",
     rating: 5,
     color: "teal",
-    text: "Vlad made learning feel like a conversation with a friend. The focus on rhythm and flow changed everything for me."
+    text: "Vlad is an amazing tutor. He is patient, clear, engaged and has a brilliant way of breaking down Spanish into easily understandable lessons. He is very easy to learn from and we look forward to our lessons with him every week. Having taught himself the language he is able to explain it in a way that is easy to digest and remember. In addition, he is very friendly and, in our opinion, you could not find a better tutor."
   },
   {
-    name: "Michael Chen",
-    role: "Travel Enthusiast",
-    lesson: "1-on-1",
+    name: "Jordan",
+    lessonCount: 49,
+    reviewDate: "Nov 7, 2025",
     rating: 5,
     color: "gold",
-    text: "I finally felt confident on my trip to Mexico. We practiced real scenarios that I actually used every day."
+    text: `Vladimir is an excellent Spanish tutor. His lessons are well-structured, and he creates personalised materials for each student, with exercises that build directly on what you've covered together. He's also particularly great if you're planning to travel to Spanish-speaking countries, as he has first-hand experience. I couldn't recommend him more. Five stars!`
+  },
+  {
+    name: "Mollie",
+    lessonCount: 12,
+    reviewDate: "Feb 27, 2026",
+    rating: 5,
+    color: "red",
+    text: `I've been learning with Vladimir for just over a month now, and I can honestly say he's a fantastic teacher. He's patient, kind, and explains things in a way that really works for me as a learner. It also helps so much that he's such a genuinely friendly, warm person. I really enjoy learning with him. I genuinely look forward to our lessons each week. He's reignited my passion for learning Spanish, which is exactly what I needed. For the first time after starting and stopping over the years, I feel like everything is finally sticking. I can truly see myself becoming conversational, and eventually fluent, with Vlad's support. Highly recommended. Thank you so much, Vlad!`
   }
 ];
 
@@ -50,7 +58,17 @@ function isAlreadyRegisteredAuthError(message) {
   );
 }
 
-async function ensureBookingAccount({ studentName, email, password, lessonType, message, date, time }) {
+async function ensureBookingAccount({
+  studentName,
+  email,
+  password,
+  lessonType,
+  message,
+  date,
+  time,
+  marketingEmailOptIn,
+  legalAcceptedAt
+}) {
   if (!window.supabaseClient) {
     return {
       ok: false,
@@ -98,6 +116,10 @@ async function ensureBookingAccount({ studentName, email, password, lessonType, 
         timezone,
         goal: "Free trial lesson",
         notes: message,
+        terms_accepted_at: legalAcceptedAt,
+        privacy_accepted_at: legalAcceptedAt,
+        marketing_email_opt_in: Boolean(marketingEmailOptIn),
+        marketing_email_opt_in_at: marketingEmailOptIn ? legalAcceptedAt : "",
         pending_trial_booking: pendingTrialBooking
       }
     }
@@ -218,6 +240,9 @@ function renderCard(review) {
   const color =
     review.color ||
     AVATAR_COLORS[Math.abs(review.name.charCodeAt(0) - 65) % AVATAR_COLORS.length];
+  const meta = review.lessonCount && review.reviewDate
+    ? `${review.lessonCount} lessons • ${review.reviewDate}`
+    : review.role || "Student";
 
   return `
     <article class="testi-card">
@@ -230,7 +255,7 @@ function renderCard(review) {
         <div class="testi-avatar ${color}">${initials}</div>
         <div>
           <div class="testi-name">${review.name}</div>
-          <div class="testi-role">${review.role || "Student"}</div>
+          <div class="testi-role">${meta}</div>
           ${review.lesson ? `<span class="testi-lesson-tag">${review.lesson}</span>` : ""}
         </div>
       </div>
@@ -620,9 +645,17 @@ function bindBookingForm() {
     const time = document.getElementById("booking-time").value;
     const lessonType = document.getElementById("booking-lesson").value;
     const message = document.getElementById("booking-message").value.trim();
+    const legalConsent = document.getElementById("booking-legal-consent").checked;
+    const marketingEmailOptIn = document.getElementById("booking-marketing-consent").checked;
+    const legalAcceptedAt = new Date().toISOString();
 
     if (!studentName || !email || !password || !confirmPassword || !date || !time) {
       setBookingFeedback("Please complete your name, email, password, and choose an available lesson slot.", "error");
+      return;
+    }
+
+    if (!legalConsent) {
+      setBookingFeedback("Please accept the Privacy Policy and Terms before booking a lesson.", "error");
       return;
     }
 
@@ -652,7 +685,9 @@ function bindBookingForm() {
       lessonType,
       message,
       date,
-      time
+      time,
+      marketingEmailOptIn,
+      legalAcceptedAt
     });
 
     if (!accountResult.ok) {
@@ -666,7 +701,10 @@ function bindBookingForm() {
       date,
       time,
       lessonType,
-      message
+      message,
+      marketingEmailOptIn,
+      termsAcceptedAt: legalAcceptedAt,
+      privacyAcceptedAt: legalAcceptedAt
     });
 
     if (!result.ok) {
@@ -708,7 +746,7 @@ function bindBookingForm() {
     });
 
     if (serverResult.ok) {
-      serverMessage = " The class was also saved to your server-side student record and is awaiting payment confirmation.";
+      serverMessage = " The class was also saved to your student record.";
     } else if (!serverResult.skipped) {
       serverMessage = " The booking saved locally, but the server copy could not be created yet.";
     }
@@ -739,12 +777,11 @@ function bindBookingForm() {
       }
     }
 
-    setBookingFeedback(
-      result.registration.created
-        ? `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. This lesson is reserved and awaiting payment.${accountMessage}${serverMessage}${emailMessage}`
-        : `Booked for ${formatDate(result.booking.date)} at ${result.booking.time}. This lesson is reserved and awaiting payment. If you already registered, you can manage your lessons from the student portal.${accountMessage}${serverMessage}${emailMessage}`,
-      "success"
-    );
+    const bookingMessage = result.registration.created
+      ? `Congratulations. Your free first lesson is booked for ${formatDate(result.booking.date)} at ${result.booking.time}. No payment is required for this first session.${accountMessage}${serverMessage}${emailMessage}`
+      : `Congratulations. Your free first lesson is booked for ${formatDate(result.booking.date)} at ${result.booking.time}. No payment is required for this first session. If you already registered, you can manage your lessons from the student portal.${accountMessage}${serverMessage}${emailMessage}`;
+
+    setBookingFeedback(bookingMessage, "success");
   });
 }
 

@@ -154,6 +154,27 @@
               <textarea id="reg-message" placeholder="What kind of Spanish do you want to speak confidently?"></textarea>
             </div>
 
+            <div class="consent-stack">
+              <label class="checkbox-row" for="reg-legal-consent">
+                <input type="checkbox" id="reg-legal-consent">
+                <span>
+                  <strong>Required:</strong> I have read the <a href="privacy-policy.html">Privacy Policy</a> and
+                  <a href="terms.html">Terms of Service</a>, and I agree to Hablawithflow using my details to create and
+                  manage my student account and lesson bookings.
+                </span>
+              </label>
+              <label class="checkbox-row" for="reg-marketing-consent">
+                <input type="checkbox" id="reg-marketing-consent">
+                <span>
+                  I want to receive lesson updates, offers, and email marketing from Hablawithflow. This is optional and I can
+                  unsubscribe at any time.
+                </span>
+              </label>
+              <p class="checkbox-note">
+                Cookie preferences for analytics and marketing are managed separately through the cookie settings tool.
+              </p>
+            </div>
+
             <button class="btn-submit" type="submit">Submit Registration</button>
             <div id="register-feedback" class="booking-feedback" hidden></div>
           </form>
@@ -228,6 +249,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="assets/js/supabase-client.js"></script>
   <script src="assets/js/app-config.js"></script>
+  <script src="assets/js/legal-consent.js"></script>
   <script src="assets/js/email-api.js"></script>
   <script src="assets/js/portal-data.js"></script>
   <script src="assets/js/register.js"></script>

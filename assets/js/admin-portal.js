@@ -171,6 +171,13 @@ function getOpenDates() {
   return [...new Set(getAvailability().map((slot) => slot.date))].sort();
 }
 
+function getFocusableDates() {
+  return [...new Set([
+    ...getOpenDates(),
+    ...getBookings().map((booking) => booking.date)
+  ])].sort();
+}
+
 function showTeacherError(message) {
   const error = byId("admin-error");
   if (!error) {
@@ -213,20 +220,36 @@ function clearTeacherLoginFeedback() {
 }
 
 function ensureFocusedDate() {
-  const openDates = getOpenDates();
+  const focusableDates = getFocusableDates();
 
-  if (!openDates.length) {
-    focusedDate = toIsoDate(new Date());
-    focusMonth = new Date();
+  if (!focusableDates.length) {
+    if (!focusedDate) {
+      focusedDate = toIsoDate(new Date());
+    }
+
+    if (!(focusMonth instanceof Date) || Number.isNaN(focusMonth.getTime())) {
+      focusMonth = new Date();
+    }
+
     return;
   }
 
-  if (!focusedDate || ![...openDates, ...getBookings().map((booking) => booking.date)].includes(focusedDate)) {
-    focusedDate = openDates[0];
+  if (!focusedDate || !focusableDates.includes(focusedDate)) {
+    focusedDate = focusableDates[0];
   }
 
-  const date = toDateFromIso(focusedDate);
-  focusMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  if (!(focusMonth instanceof Date) || Number.isNaN(focusMonth.getTime())) {
+    const date = toDateFromIso(focusedDate);
+    focusMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  }
+}
+
+function syncFocusedDateToFocusMonth() {
+  const monthStart = new Date(focusMonth.getFullYear(), focusMonth.getMonth(), 1);
+  const monthKey = toIsoDate(monthStart).slice(0, 7);
+  const monthDates = getFocusableDates().filter((date) => date.startsWith(monthKey));
+
+  focusedDate = monthDates.length ? monthDates[0] : toIsoDate(monthStart);
 }
 
 async function loadServerBookings() {
@@ -652,6 +675,7 @@ function renderFocusDateGrid() {
   grid.querySelectorAll(".focus-date-cell:not(.empty)").forEach((button) => {
     button.addEventListener("click", () => {
       focusedDate = button.dataset.date;
+      focusMonth = new Date(parseDateParts(focusedDate).year, parseDateParts(focusedDate).month - 1, 1);
       renderFocusDateGrid();
       renderFocusHoursGrid();
     });
@@ -1122,12 +1146,16 @@ function bindCalendarControls() {
 
   byId("focus-prev").addEventListener("click", () => {
     focusMonth = shiftMonth(focusMonth, -1);
+    syncFocusedDateToFocusMonth();
     renderFocusDateGrid();
+    renderFocusHoursGrid();
   });
 
   byId("focus-next").addEventListener("click", () => {
     focusMonth = shiftMonth(focusMonth, 1);
+    syncFocusedDateToFocusMonth();
     renderFocusDateGrid();
+    renderFocusHoursGrid();
   });
 }
 
