@@ -2084,7 +2084,7 @@ textarea {
 
 .roster-tools {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.6fr) auto;
   gap: 10px;
   align-items: center;
   margin-top: 14px;
@@ -2112,11 +2112,87 @@ textarea {
   white-space: nowrap;
 }
 
+.roster-group-filter {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--white);
+  font-size: 0.88rem;
+}
+
+.roster-group-filter:focus-visible {
+  outline: 0;
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.08);
+}
+
 .roster-scroll {
   max-height: 560px;
   overflow-y: auto;
   padding-right: 6px;
   margin-top: 16px;
+}
+
+.roster-group-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.roster-group-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(192, 57, 43, 0.1);
+  color: #8b3d31;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.group-manager-shell {
+  margin: 16px 0 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: #fffaf5;
+  display: grid;
+  gap: 12px;
+}
+
+.group-manager-row {
+  display: grid;
+  gap: 8px;
+}
+
+.group-inline-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 8px;
+}
+
+.group-inline-actions input,
+.group-inline-actions select {
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--white);
+}
+
+.group-list-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.group-list-count {
+  font-size: 0.8rem;
+  color: #6f635b;
 }
 
 .calendar-toolbar {
@@ -3100,6 +3176,10 @@ textarea {
 
   .roster-count {
     justify-self: start;
+  }
+
+  .group-inline-actions {
+    grid-template-columns: 1fr;
   }
 
   .roster-scroll {

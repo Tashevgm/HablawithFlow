@@ -155,6 +155,22 @@ function getStudents() {
   return window.HWFData.listStudents();
 }
 
+function getStudentGroups() {
+  if (!window.HWFData || typeof window.HWFData.listStudentGroups !== "function") {
+    return [];
+  }
+
+  return window.HWFData.listStudentGroups();
+}
+
+function getGroupsForStudent(studentId) {
+  if (!window.HWFData || typeof window.HWFData.getStudentGroupsForStudent !== "function") {
+    return [];
+  }
+
+  return window.HWFData.getStudentGroupsForStudent(studentId);
+}
+
 function formatStudentSummaryDate(date, time) {
   if (!date || !time) {
     return "No date set";
@@ -1018,9 +1034,100 @@ function renderSelectedStudentDetail(student) {
   }
 }
 
+function setStudentGroupFeedback(message, type) {
+  const feedback = byId("student-group-feedback");
+  if (!feedback) {
+    return;
+  }
+
+  feedback.textContent = message;
+  feedback.className = `booking-feedback ${type}`;
+  feedback.hidden = false;
+}
+
+function clearStudentGroupFeedback() {
+  const feedback = byId("student-group-feedback");
+  if (!feedback) {
+    return;
+  }
+
+  feedback.hidden = true;
+  feedback.textContent = "";
+}
+
+function renderGroupManager() {
+  const filterSelect = byId("student-group-filter");
+  const assignSelect = byId("student-assign-group");
+  const listContainer = byId("student-group-list");
+
+  if (!filterSelect || !assignSelect || !listContainer) {
+    return;
+  }
+
+  const groups = getStudentGroups();
+  const previousFilter = filterSelect.value || "";
+  const previousAssign = assignSelect.value || "";
+
+  filterSelect.innerHTML = [
+    '<option value="">All groups</option>',
+    ...groups.map((group) => `<option value="${group.id}">${group.name}</option>`)
+  ].join("");
+
+  assignSelect.innerHTML = [
+    '<option value="">Select a group...</option>',
+    ...groups.map((group) => `<option value="${group.id}">${group.name}</option>`)
+  ].join("");
+
+  if (groups.some((group) => group.id === previousFilter)) {
+    filterSelect.value = previousFilter;
+  }
+  if (groups.some((group) => group.id === previousAssign)) {
+    assignSelect.value = previousAssign;
+  }
+
+  if (!groups.length) {
+    listContainer.innerHTML = '<p class="empty-copy">No groups created yet.</p>';
+    return;
+  }
+
+  listContainer.innerHTML = groups
+    .map((group) => {
+      return `
+        <article class="list-card group-list-card">
+          <div>
+            <strong>${group.name}</strong>
+            <p class="group-list-count">${group.studentCount} student${group.studentCount === 1 ? "" : "s"}</p>
+          </div>
+          <button class="list-action danger student-group-delete" type="button" data-group-id="${group.id}">
+            Delete
+          </button>
+        </article>
+      `;
+    })
+    .join("");
+
+  listContainer.querySelectorAll(".student-group-delete").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!window.HWFData || typeof window.HWFData.deleteStudentGroup !== "function") {
+        return;
+      }
+
+      const result = window.HWFData.deleteStudentGroup(button.dataset.groupId);
+      if (!result.ok) {
+        setStudentGroupFeedback(result.error || "Could not delete group.", "error");
+        return;
+      }
+
+      setStudentGroupFeedback("Group deleted.", "success");
+      renderAdminDashboard();
+    });
+  });
+}
+
 function renderRoster() {
   const container = byId("student-roster");
   const filterInput = byId("student-roster-filter");
+  const groupFilterSelect = byId("student-group-filter");
   const countLabel = byId("student-roster-count");
 
   if (!container) {
@@ -1029,13 +1136,16 @@ function renderRoster() {
 
   const students = getStudents();
   const query = filterInput ? filterInput.value.trim().toLowerCase() : "";
+  const groupFilterId = groupFilterSelect ? String(groupFilterSelect.value || "") : "";
   const filteredStudents = query
     ? students.filter((student) => {
+        const groupNames = getGroupsForStudent(student.id).map((group) => group.name).join(" ");
         const searchable = [
           student.name,
           student.email,
           student.track,
-          student.level
+          student.level,
+          groupNames
         ]
           .map((value) => String(value || "").toLowerCase())
           .join(" ");
@@ -1043,8 +1153,14 @@ function renderRoster() {
       })
     : students;
 
+  const groupFilteredStudents = groupFilterId
+    ? filteredStudents.filter((student) => {
+        return getGroupsForStudent(student.id).some((group) => group.id === groupFilterId);
+      })
+    : filteredStudents;
+
   if (countLabel) {
-    countLabel.textContent = `${filteredStudents.length} of ${students.length} shown`;
+    countLabel.textContent = `${groupFilteredStudents.length} of ${students.length} shown`;
   }
 
   if (!students.length) {
@@ -1052,15 +1168,21 @@ function renderRoster() {
     return;
   }
 
-  if (!filteredStudents.length) {
+  if (!groupFilteredStudents.length) {
     container.innerHTML = '<p class="empty-copy">No students match your search.</p>';
     return;
   }
 
-  container.innerHTML = filteredStudents
+  container.innerHTML = groupFilteredStudents
     .map((student) => {
       const percent = Math.round((student.completedLessons / Math.max(student.totalLessons, 1)) * 100);
       const selectedId = byId("student-select") ? byId("student-select").value : "";
+      const studentGroups = getGroupsForStudent(student.id);
+      const groupBadges = studentGroups.length
+        ? `<div class="roster-group-chips">${studentGroups
+            .map((group) => `<span class="roster-group-chip">${group.name}</span>`)
+            .join("")}</div>`
+        : "";
       return `
         <button class="list-card roster-card-button ${selectedId === student.id ? "active" : ""}" type="button" data-student-id="${student.id}">
           <div class="list-card-top">
@@ -1068,6 +1190,7 @@ function renderRoster() {
             <span class="status-pill">${student.level}</span>
           </div>
           <p>${student.track}</p>
+          ${groupBadges}
           <div class="progress-wrap compact-progress">
             <div class="progress-copy">
               <span>Progress</span>
@@ -1108,6 +1231,7 @@ function renderAdminDashboard() {
   renderBulkDefaults();
   renderBookings();
   renderStudentSelect();
+  renderGroupManager();
   renderRoster();
 
   if (currentStudentId) {
@@ -1372,7 +1496,93 @@ function bindStudentEditor() {
     });
   }
 
+  const groupFilterSelect = byId("student-group-filter");
+  if (groupFilterSelect) {
+    groupFilterSelect.addEventListener("change", () => {
+      renderRoster();
+    });
+  }
+
+  const createGroupButton = byId("create-student-group");
+  if (createGroupButton) {
+    createGroupButton.addEventListener("click", () => {
+      clearStudentGroupFeedback();
+
+      if (!window.HWFData || typeof window.HWFData.createStudentGroup !== "function") {
+        setStudentGroupFeedback("Group management is not available.", "error");
+        return;
+      }
+
+      const input = byId("new-student-group");
+      const groupName = input ? input.value.trim() : "";
+      const result = window.HWFData.createStudentGroup(groupName);
+
+      if (!result.ok) {
+        setStudentGroupFeedback(result.error || "Could not create group.", "error");
+        return;
+      }
+
+      if (input) {
+        input.value = "";
+      }
+      setStudentGroupFeedback(`Group "${result.group.name}" created.`, "success");
+      renderAdminDashboard();
+    });
+  }
+
+  const assignButton = byId("assign-student-group");
+  if (assignButton) {
+    assignButton.addEventListener("click", () => {
+      clearStudentGroupFeedback();
+
+      if (!window.HWFData || typeof window.HWFData.assignStudentToGroup !== "function") {
+        setStudentGroupFeedback("Group management is not available.", "error");
+        return;
+      }
+
+      const studentId = byId("student-select").value;
+      const groupId = byId("student-assign-group") ? byId("student-assign-group").value : "";
+      const result = window.HWFData.assignStudentToGroup(studentId, groupId);
+
+      if (!result.ok) {
+        setStudentGroupFeedback(result.error || "Could not assign student to group.", "error");
+        return;
+      }
+
+      setStudentGroupFeedback(
+        result.alreadyAssigned ? "Student is already in this group." : "Student assigned to group.",
+        "success"
+      );
+      renderAdminDashboard();
+    });
+  }
+
+  const unassignButton = byId("unassign-student-group");
+  if (unassignButton) {
+    unassignButton.addEventListener("click", () => {
+      clearStudentGroupFeedback();
+
+      if (!window.HWFData || typeof window.HWFData.removeStudentFromGroup !== "function") {
+        setStudentGroupFeedback("Group management is not available.", "error");
+        return;
+      }
+
+      const studentId = byId("student-select").value;
+      const groupId = byId("student-assign-group") ? byId("student-assign-group").value : "";
+      const result = window.HWFData.removeStudentFromGroup(studentId, groupId);
+
+      if (!result.ok) {
+        setStudentGroupFeedback(result.error || "Could not unassign student from group.", "error");
+        return;
+      }
+
+      setStudentGroupFeedback(result.removed ? "Student removed from group." : "Student was not in this group.", "success");
+      renderAdminDashboard();
+    });
+  }
+
   byId("student-select").addEventListener("change", (event) => {
+    clearStudentGroupFeedback();
     loadStudentIntoForm(event.target.value);
   });
 

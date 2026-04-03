@@ -17,6 +17,7 @@ const DEFAULT_PORTAL_STATE = {
   ],
   bookings: [],
   students: [],
+  studentGroups: [],
   teacherAccessCode: "vlad-admin"
 };
 
@@ -357,6 +358,7 @@ function sanitizePortalState(state) {
         }))
       : [],
     students: Array.isArray(state?.students) ? state.students : [],
+    studentGroups: Array.isArray(state?.studentGroups) ? state.studentGroups : [],
     teacherAccessCode:
       typeof state?.teacherAccessCode === "string" && state.teacherAccessCode.trim()
         ? state.teacherAccessCode.trim()
@@ -370,6 +372,31 @@ function sanitizePortalState(state) {
   nextState.students = nextState.students
     .filter((student) => student && !DEMO_STUDENT_EMAILS.has(normalizeEmail(student.email || "")))
     .map(normalizeStudent);
+
+  const validStudentIds = new Set(nextState.students.map((student) => student.id).filter(Boolean));
+  const seenGroupNames = new Set();
+  nextState.studentGroups = nextState.studentGroups
+    .filter((group) => group && typeof group.name === "string" && group.name.trim().length > 0)
+    .map((group) => {
+      const normalizedStudentIds = Array.isArray(group.studentIds)
+        ? [...new Set(group.studentIds.map((id) => String(id || "").trim()).filter((id) => validStudentIds.has(id)))]
+        : [];
+
+      return {
+        id: String(group.id || "").trim() || buildId("group"),
+        name: group.name.trim(),
+        studentIds: normalizedStudentIds
+      };
+    })
+    .filter((group) => {
+      const key = group.name.toLowerCase();
+      if (seenGroupNames.has(key)) {
+        return false;
+      }
+      seenGroupNames.add(key);
+      return true;
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
 
   return nextState;
 }
@@ -421,6 +448,123 @@ function listStudents() {
   return readPortalState().students.sort((left, right) => left.name.localeCompare(right.name));
 }
 
+function listStudentGroups() {
+  return readPortalState().studentGroups
+    .map((group) => ({
+      ...group,
+      studentIds: Array.isArray(group.studentIds) ? [...group.studentIds] : [],
+      studentCount: Array.isArray(group.studentIds) ? group.studentIds.length : 0
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function getStudentGroupsForStudent(studentId) {
+  const normalizedStudentId = String(studentId || "").trim();
+  if (!normalizedStudentId) {
+    return [];
+  }
+
+  return listStudentGroups().filter((group) => group.studentIds.includes(normalizedStudentId));
+}
+
+function createStudentGroup(name) {
+  const groupName = String(name || "").trim();
+  if (!groupName) {
+    return { ok: false, error: "Enter a group name first." };
+  }
+
+  const state = readPortalState();
+  if (
+    state.studentGroups.some((group) => String(group.name || "").trim().toLowerCase() === groupName.toLowerCase())
+  ) {
+    return { ok: false, error: "That group already exists." };
+  }
+
+  const newGroup = {
+    id: buildId("group"),
+    name: groupName,
+    studentIds: []
+  };
+  state.studentGroups.push(newGroup);
+  writePortalState(state);
+
+  return { ok: true, group: newGroup };
+}
+
+function assignStudentToGroup(studentId, groupId) {
+  const normalizedStudentId = String(studentId || "").trim();
+  const normalizedGroupId = String(groupId || "").trim();
+  if (!normalizedStudentId || !normalizedGroupId) {
+    return { ok: false, error: "Select a student and group first." };
+  }
+
+  const state = readPortalState();
+  const student = state.students.find((entry) => entry.id === normalizedStudentId);
+  if (!student) {
+    return { ok: false, error: "Student not found." };
+  }
+
+  const group = state.studentGroups.find((entry) => entry.id === normalizedGroupId);
+  if (!group) {
+    return { ok: false, error: "Group not found." };
+  }
+
+  if (!Array.isArray(group.studentIds)) {
+    group.studentIds = [];
+  }
+
+  if (group.studentIds.includes(normalizedStudentId)) {
+    return { ok: true, alreadyAssigned: true, group };
+  }
+
+  group.studentIds.push(normalizedStudentId);
+  writePortalState(state);
+
+  return { ok: true, alreadyAssigned: false, group };
+}
+
+function removeStudentFromGroup(studentId, groupId) {
+  const normalizedStudentId = String(studentId || "").trim();
+  const normalizedGroupId = String(groupId || "").trim();
+  if (!normalizedStudentId || !normalizedGroupId) {
+    return { ok: false, error: "Select a student and group first." };
+  }
+
+  const state = readPortalState();
+  const group = state.studentGroups.find((entry) => entry.id === normalizedGroupId);
+  if (!group) {
+    return { ok: false, error: "Group not found." };
+  }
+
+  const beforeCount = Array.isArray(group.studentIds) ? group.studentIds.length : 0;
+  group.studentIds = (group.studentIds || []).filter((id) => id !== normalizedStudentId);
+  const changed = group.studentIds.length !== beforeCount;
+
+  if (changed) {
+    writePortalState(state);
+  }
+
+  return { ok: true, removed: changed, group };
+}
+
+function deleteStudentGroup(groupId) {
+  const normalizedGroupId = String(groupId || "").trim();
+  if (!normalizedGroupId) {
+    return { ok: false, error: "Group not found." };
+  }
+
+  const state = readPortalState();
+  const beforeCount = state.studentGroups.length;
+  state.studentGroups = state.studentGroups.filter((group) => group.id !== normalizedGroupId);
+
+  if (state.studentGroups.length === beforeCount) {
+    return { ok: false, error: "Group not found." };
+  }
+
+  writePortalState(state);
+  return { ok: true };
+}
+
 function pruneStudentsByEmails(activeEmails) {
   const emailSet = new Set(
     (Array.isArray(activeEmails) ? activeEmails : [])
@@ -429,9 +573,19 @@ function pruneStudentsByEmails(activeEmails) {
   );
   const state = readPortalState();
   const nextStudents = state.students.filter((student) => emailSet.has(normalizeEmail(student.email || "")));
+  const validStudentIds = new Set(nextStudents.map((student) => student.id).filter(Boolean));
+  const nextGroups = (state.studentGroups || []).map((group) => ({
+    ...group,
+    studentIds: Array.isArray(group.studentIds)
+      ? group.studentIds.filter((studentId) => validStudentIds.has(studentId))
+      : []
+  }));
 
-  if (nextStudents.length !== state.students.length) {
+  const studentsChanged = nextStudents.length !== state.students.length;
+  const groupsChanged = JSON.stringify(nextGroups) !== JSON.stringify(state.studentGroups || []);
+  if (studentsChanged || groupsChanged) {
     state.students = nextStudents;
+    state.studentGroups = nextGroups;
     writePortalState(state);
   }
 
@@ -771,6 +925,12 @@ window.HWFData = {
   listAvailability,
   listBookings,
   listStudents,
+  listStudentGroups,
+  getStudentGroupsForStudent,
+  createStudentGroup,
+  assignStudentToGroup,
+  removeStudentFromGroup,
+  deleteStudentGroup,
   normalizeBookingStatus,
   getBookingStatusMeta,
   getTeacherAccessCode,

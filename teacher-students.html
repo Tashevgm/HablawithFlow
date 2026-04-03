@@ -82,6 +82,9 @@
                     placeholder="Search student, email, track..."
                     aria-label="Search students in roster"
                   >
+                  <select id="student-group-filter" class="roster-group-filter" aria-label="Filter students by group">
+                    <option value="">All groups</option>
+                  </select>
                   <span id="student-roster-count" class="roster-count">0 shown</span>
                 </div>
               </div>
@@ -165,6 +168,27 @@
             <div class="form-group">
               <label for="student-select">Student</label>
               <select id="student-select"></select>
+            </div>
+
+            <div class="group-manager-shell">
+              <h3 class="portal-subheading">Student Groups</h3>
+              <div class="group-manager-row">
+                <label for="new-student-group">Create Group</label>
+                <div class="group-inline-actions">
+                  <input type="text" id="new-student-group" placeholder="e.g. Beginner Evening">
+                  <button class="btn-outline" id="create-student-group" type="button">Create</button>
+                </div>
+              </div>
+              <div class="group-manager-row">
+                <label for="student-assign-group">Assign Selected Student</label>
+                <div class="group-inline-actions">
+                  <select id="student-assign-group"></select>
+                  <button class="btn-outline" id="assign-student-group" type="button">Assign</button>
+                  <button class="btn-outline" id="unassign-student-group" type="button">Unassign</button>
+                </div>
+              </div>
+              <div class="stack-list compact-stack" id="student-group-list"></div>
+              <div id="student-group-feedback" class="booking-feedback" hidden></div>
             </div>
 
             <div class="form-row">
