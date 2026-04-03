@@ -74,8 +74,18 @@
                   <h2>Student Roster Snapshot</h2>
                   <p class="portal-sub">Quick overview of progress across your active learners.</p>
                 </div>
+                <div class="roster-tools">
+                  <input
+                    id="student-roster-filter"
+                    class="roster-search"
+                    type="search"
+                    placeholder="Search student, email, track..."
+                    aria-label="Search students in roster"
+                  >
+                  <span id="student-roster-count" class="roster-count">0 shown</span>
+                </div>
               </div>
-              <div class="stack-list" id="student-roster"></div>
+              <div class="stack-list roster-scroll" id="student-roster"></div>
             </article>
 
             <article class="dashboard-card">

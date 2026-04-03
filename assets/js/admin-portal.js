@@ -1020,19 +1020,44 @@ function renderSelectedStudentDetail(student) {
 
 function renderRoster() {
   const container = byId("student-roster");
+  const filterInput = byId("student-roster-filter");
+  const countLabel = byId("student-roster-count");
 
   if (!container) {
     return;
   }
 
   const students = getStudents();
+  const query = filterInput ? filterInput.value.trim().toLowerCase() : "";
+  const filteredStudents = query
+    ? students.filter((student) => {
+        const searchable = [
+          student.name,
+          student.email,
+          student.track,
+          student.level
+        ]
+          .map((value) => String(value || "").toLowerCase())
+          .join(" ");
+        return searchable.includes(query);
+      })
+    : students;
+
+  if (countLabel) {
+    countLabel.textContent = `${filteredStudents.length} of ${students.length} shown`;
+  }
 
   if (!students.length) {
     container.innerHTML = '<p class="empty-copy">No students are registered yet.</p>';
     return;
   }
 
-  container.innerHTML = students
+  if (!filteredStudents.length) {
+    container.innerHTML = '<p class="empty-copy">No students match your search.</p>';
+    return;
+  }
+
+  container.innerHTML = filteredStudents
     .map((student) => {
       const percent = Math.round((student.completedLessons / Math.max(student.totalLessons, 1)) * 100);
       const selectedId = byId("student-select") ? byId("student-select").value : "";
@@ -1338,6 +1363,13 @@ function bindBulkControls() {
 function bindStudentEditor() {
   if (!byId("student-select")) {
     return;
+  }
+
+  const filterInput = byId("student-roster-filter");
+  if (filterInput) {
+    filterInput.addEventListener("input", () => {
+      renderRoster();
+    });
   }
 
   byId("student-select").addEventListener("change", (event) => {
