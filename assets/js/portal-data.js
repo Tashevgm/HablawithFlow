@@ -379,6 +379,23 @@ function listStudents() {
   return readPortalState().students.sort((left, right) => left.name.localeCompare(right.name));
 }
 
+function pruneStudentsByEmails(activeEmails) {
+  const emailSet = new Set(
+    (Array.isArray(activeEmails) ? activeEmails : [])
+      .map((email) => normalizeEmail(String(email || "")))
+      .filter(Boolean)
+  );
+  const state = readPortalState();
+  const nextStudents = state.students.filter((student) => emailSet.has(normalizeEmail(student.email || "")));
+
+  if (nextStudents.length !== state.students.length) {
+    state.students = nextStudents;
+    writePortalState(state);
+  }
+
+  return nextStudents.sort((left, right) => left.name.localeCompare(right.name));
+}
+
 function getTeacherAccessCode() {
   return readPortalState().teacherAccessCode;
 }
@@ -701,6 +718,7 @@ window.HWFData = {
   getStudentByCredentials,
   getStudentByEmail,
   ensureStudentFromProfile,
+  pruneStudentsByEmails,
   registerStudent,
   addAvailabilitySlot,
   addAvailabilitySlots,

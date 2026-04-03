@@ -16,6 +16,7 @@ const ownerEmail = process.env.OWNER_EMAIL || "";
 const bookingTeacherEmails = process.env.BOOKING_TEACHER_EMAILS || "";
 const teacherInviteToken = process.env.TEACHER_INVITE_TOKEN || "";
 const publicSiteUrl = process.env.PUBLIC_SITE_URL || "https://hablawithflow.com";
+const TEACHER_ROLES = new Set(["teacher", "admin"]);
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
@@ -160,6 +161,42 @@ async function requireOwnerAccess(request, response) {
   const normalizedOwnerEmail = ownerEmail.trim().toLowerCase();
   if (sessionEmail !== normalizedOwnerEmail) {
     jsonError(response, 403, "Owner access only.");
+    return null;
+  }
+
+  return user;
+}
+
+async function getProfileRole(userId) {
+  if (!supabaseAdmin) {
+    return "";
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    return "";
+  }
+
+  return String(data?.role || "").trim().toLowerCase();
+}
+
+async function requireTeacherAccess(request, response) {
+  const user = await requireAuthenticatedUser(request, response);
+  if (!user) {
+    return null;
+  }
+
+  const metadataRole = String(user.user_metadata?.role || "").trim().toLowerCase();
+  const profileRole = await getProfileRole(user.id);
+  const role = profileRole || metadataRole;
+
+  if (!TEACHER_ROLES.has(role)) {
+    jsonError(response, 403, "Teacher access only.");
     return null;
   }
 
@@ -492,15 +529,15 @@ function registrationHtml({ name, email, track, goal, timezone }) {
   `;
 }
 
-async function findAuthUserByEmail(email) {
+async function listAuthUsers(maxPages = 10) {
   if (!supabaseAdmin) {
-    return null;
+    return [];
   }
 
+  const users = [];
   let page = 1;
-  const normalizedEmail = email.trim().toLowerCase();
 
-  while (page <= 10) {
+  while (page <= maxPages) {
     const { data, error } = await supabaseAdmin.auth.admin.listUsers({
       page,
       perPage: 200
@@ -510,17 +547,25 @@ async function findAuthUserByEmail(email) {
       throw error;
     }
 
-    const users = data?.users || [];
-    const match = users.find((user) => (user.email || "").toLowerCase() === normalizedEmail);
-    if (match) {
-      return match;
-    }
+    const batch = data?.users || [];
+    users.push(...batch);
 
-    if (users.length < 200) {
+    if (batch.length < 200) {
       break;
     }
 
     page += 1;
+  }
+
+  return users;
+}
+
+async function findAuthUserByEmail(email) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const users = await listAuthUsers(10);
+  const match = users.find((user) => (user.email || "").toLowerCase() === normalizedEmail);
+  if (match) {
+    return match;
   }
 
   return null;
@@ -905,6 +950,66 @@ app.post("/api/booking/confirm-email-complete", async (request, response) => {
   } catch (error) {
     console.error("Failed to complete booking after confirmation", error);
     jsonError(response, 500, "Failed to finalize booking after email confirmation.");
+  }
+});
+
+app.get("/api/teacher/students", async (request, response) => {
+  try {
+    if (!(await requireTeacherAccess(request, response))) {
+      return;
+    }
+
+    const [{ data: profileRows, error: profileError }, authUsers] = await Promise.all([
+      supabaseAdmin.from("profiles").select("id, role, full_name, level, track, goal, notes"),
+      listAuthUsers(10)
+    ]);
+
+    if (profileError) {
+      throw profileError;
+    }
+
+    const authUserById = new Map(authUsers.map((user) => [user.id, user]));
+    const students = (profileRows || [])
+      .filter((profile) => String(profile.role || "student").toLowerCase() === "student")
+      .map((profile) => {
+        const authUser = authUserById.get(profile.id);
+        const email = (authUser?.email || "").trim().toLowerCase();
+        if (!required(email)) {
+          return null;
+        }
+
+        const metadataRole = String(authUser?.user_metadata?.role || "").trim().toLowerCase();
+        if (metadataRole === "teacher" || metadataRole === "admin") {
+          return null;
+        }
+
+        if (required(ownerEmail) && email === ownerEmail.trim().toLowerCase()) {
+          return null;
+        }
+
+        const metadataName = String(authUser?.user_metadata?.full_name || "").trim();
+        const fullName = String(profile.full_name || metadataName || email.split("@")[0]).trim();
+
+        return {
+          id: profile.id,
+          email,
+          name: fullName,
+          full_name: fullName,
+          level: profile.level || "Beginner",
+          track: profile.track || "1-on-1",
+          goal: profile.goal || "Conversation",
+          notes: profile.notes || ""
+        };
+      })
+      .filter(Boolean);
+
+    response.json({
+      ok: true,
+      students
+    });
+  } catch (error) {
+    console.error("Failed to fetch teacher students", error);
+    jsonError(response, 500, "Failed to fetch teacher student roster.");
   }
 });
 

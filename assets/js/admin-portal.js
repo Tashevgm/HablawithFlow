@@ -21,6 +21,10 @@ function byId(id) {
   return document.getElementById(id);
 }
 
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
 function buildTeacherLoginUrl() {
   const currentPath = window.location.pathname.split("/").pop() || "admin.html";
   const targetPath = currentPath === "teacher-login.html" ? "admin.html" : currentPath;
@@ -268,6 +272,81 @@ async function loadServerBookings() {
   return true;
 }
 
+async function fetchTeacherStudentsFromServer() {
+  if (!window.supabaseClient) {
+    return null;
+  }
+
+  const {
+    data: { session }
+  } = await window.supabaseClient.auth.getSession();
+  const accessToken = session?.access_token || "";
+  if (!accessToken) {
+    return null;
+  }
+
+  const configuredApiBase =
+    window.HWF_APP_CONFIG && typeof window.HWF_APP_CONFIG.apiBase === "string"
+      ? window.HWF_APP_CONFIG.apiBase.trim()
+      : "";
+  const apiBase = configuredApiBase || window.location.origin;
+
+  try {
+    const result = await fetch(`${apiBase}/api/teacher/students`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    if (!result.ok) {
+      return null;
+    }
+
+    const payload = await result.json();
+    if (!payload || payload.ok !== true || !Array.isArray(payload.students)) {
+      return null;
+    }
+
+    return payload.students;
+  } catch {
+    return null;
+  }
+}
+
+async function syncStudentsFromServerProfiles() {
+  if (
+    !window.HWFData ||
+    typeof window.HWFData.ensureStudentFromProfile !== "function" ||
+    typeof window.HWFData.pruneStudentsByEmails !== "function"
+  ) {
+    return false;
+  }
+
+  const serverStudents = await fetchTeacherStudentsFromServer();
+  if (!Array.isArray(serverStudents)) {
+    return false;
+  }
+
+  const activeEmails = [];
+  serverStudents.forEach((student) => {
+    const email = normalizeEmail(student.email);
+    if (!email) {
+      return;
+    }
+
+    window.HWFData.ensureStudentFromProfile({
+      ...student,
+      name: student.name || student.full_name || email.split("@")[0],
+      full_name: student.full_name || student.name || email.split("@")[0],
+      email
+    });
+    activeEmails.push(email);
+  });
+
+  window.HWFData.pruneStudentsByEmails(activeEmails);
+  return true;
+}
+
 function setDashboardActionError(message) {
   const error = byId("slot-error");
   if (!error) {
@@ -332,6 +411,7 @@ async function showTeacherDashboard() {
   }
 
   await loadServerBookings();
+  await syncStudentsFromServerProfiles();
   renderAdminDashboard();
 }
 
