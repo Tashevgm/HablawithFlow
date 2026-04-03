@@ -7,6 +7,7 @@ let selectedStudentRating = 0;
 let studentBookingMonth = null;
 let selectedStudentBookingDate = "";
 let selectedStudentBookingTime = "";
+const TEACHER_PORTAL_ROLES = new Set(["teacher", "admin"]);
 
 function getPasswordResetRedirect() {
   return `${window.location.origin}/set-password.html`;
@@ -130,19 +131,34 @@ async function loadSupabaseProfile(user) {
 }
 
 async function getPortalRoleForUser(user) {
-  const metadataRole = String(user.user_metadata?.role || "").toLowerCase();
-
-  const { data, error } = await window.supabaseClient
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (error) {
+  const metadataRole = String(user.user_metadata?.role || user.app_metadata?.role || "").toLowerCase();
+  if (TEACHER_PORTAL_ROLES.has(metadataRole)) {
     return metadataRole;
   }
 
-  return String(data?.role || metadataRole || "student").toLowerCase();
+  const [profileResult, teacherProfileResult] = await Promise.all([
+    window.supabaseClient
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle(),
+    window.supabaseClient
+      .from("teacher_profiles")
+      .select("id")
+      .eq("id", user.id)
+      .maybeSingle()
+  ]);
+
+  const profileRole = profileResult.error ? "" : String(profileResult.data?.role || "").toLowerCase();
+  if (TEACHER_PORTAL_ROLES.has(profileRole)) {
+    return profileRole;
+  }
+
+  if (!teacherProfileResult.error && teacherProfileResult.data?.id) {
+    return "teacher";
+  }
+
+  return profileRole || metadataRole || "student";
 }
 
 async function openStudentDashboardFromSession() {
@@ -155,7 +171,7 @@ async function openStudentDashboardFromSession() {
   }
 
   const role = await getPortalRoleForUser(user);
-  if (role === "teacher" || role === "admin") {
+  if (TEACHER_PORTAL_ROLES.has(role)) {
     currentStudent = null;
     currentSupabaseUserId = "";
     await window.supabaseClient.auth.signOut();
@@ -163,7 +179,7 @@ async function openStudentDashboardFromSession() {
     document.getElementById("student-login-card").hidden = false;
     document.getElementById("student-password").value = "";
     document.getElementById("student-error").hidden = true;
-    setStudentLoginFeedback("Teacher accounts must sign in from the Teacher Login page.", "error");
+    setStudentLoginFeedback("Teacher/admin accounts must sign in from the Teacher Login page.", "error");
     return;
   }
 
