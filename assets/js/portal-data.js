@@ -62,6 +62,40 @@ function normalizeTimeToHour(time) {
   return `${hours}:00`;
 }
 
+function parseSlotDateTime(date, time) {
+  if (typeof date !== "string" || typeof time !== "string") {
+    return null;
+  }
+
+  const dateMatch = date.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const timeMatch = time.trim().match(/^(\d{2}):(\d{2})$/);
+  if (!dateMatch || !timeMatch) {
+    return null;
+  }
+
+  const year = Number(dateMatch[1]);
+  const month = Number(dateMatch[2]);
+  const day = Number(dateMatch[3]);
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+
+  const parsed = new Date(year, month - 1, day, hour, minute, 0, 0);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function isFutureAvailabilitySlot(slot, now = new Date()) {
+  const parsed = parseSlotDateTime(slot?.date, slot?.time);
+  if (!parsed) {
+    return false;
+  }
+
+  return parsed.getTime() > now.getTime();
+}
+
 function normalizeBookingStatus(status) {
   const rawStatus = String(status || "").trim().toLowerCase();
 
@@ -314,7 +348,7 @@ function sanitizePortalState(state) {
             ...slot,
             time: normalizeTimeToHour(slot.time)
           }))
-        )
+        ).filter((slot) => isFutureAvailabilitySlot(slot))
       : deepClone(DEFAULT_PORTAL_STATE.availability),
     bookings: Array.isArray(state?.bookings)
       ? state.bookings.map((booking) => ({
@@ -368,7 +402,15 @@ function ensurePortalState() {
 }
 
 function listAvailability() {
-  return sortByDateTime(readPortalState().availability);
+  const state = readPortalState();
+  const nextAvailability = state.availability.filter((slot) => isFutureAvailabilitySlot(slot));
+
+  if (nextAvailability.length !== state.availability.length) {
+    state.availability = nextAvailability;
+    writePortalState(state);
+  }
+
+  return sortByDateTime(nextAvailability);
 }
 
 function listBookings() {
@@ -528,6 +570,11 @@ function addAvailabilitySlot(slot) {
   const state = readPortalState();
   const date = slot.date;
   const time = normalizeTimeToHour(slot.time);
+  const candidate = { date, time };
+
+  if (!isFutureAvailabilitySlot(candidate)) {
+    return { ok: false, error: "Cannot add a slot in the past." };
+  }
 
   const hasBooking = getAuthoritativeBookings().some((entry) => entry.date === date && entry.time === time);
   if (hasBooking) {
@@ -558,6 +605,12 @@ function addAvailabilitySlots(slots) {
   slots.forEach((slot) => {
     const date = slot.date;
     const time = normalizeTimeToHour(slot.time);
+    const candidate = { date, time };
+
+    if (!isFutureAvailabilitySlot(candidate)) {
+      skipped += 1;
+      return;
+    }
 
     const hasBooking = authoritativeBookings.some((entry) => entry.date === date && entry.time === time);
     const duplicate = state.availability.some((entry) => entry.date === date && entry.time === time);
@@ -596,11 +649,18 @@ function removeAvailabilitySlot(slotId) {
 function createBooking(booking) {
   const state = readPortalState();
   const normalizedEmail = normalizeEmail(booking.email);
+  const bookingDate = booking.date;
+  const bookingTime = normalizeTimeToHour(booking.time);
+
+  if (!isFutureAvailabilitySlot({ date: bookingDate, time: bookingTime })) {
+    return { ok: false, error: "That lesson time has already passed. Please choose a future slot." };
+  }
+
   const existingRegistration = readRegistrations().find((registration) => {
     return normalizeEmail(registration.email) === normalizedEmail;
   }) || null;
   const matchingSlot = state.availability.find((slot) => {
-    return slot.date === booking.date && slot.time === booking.time;
+    return slot.date === bookingDate && slot.time === bookingTime;
   });
 
   if (!matchingSlot) {
@@ -613,8 +673,8 @@ function createBooking(booking) {
     id: buildId("booking"),
     studentName: booking.studentName,
     email: normalizedEmail,
-    date: booking.date,
-    time: booking.time,
+    date: bookingDate,
+    time: bookingTime,
     lessonType: booking.lessonType,
     message: booking.message,
     status: "pending_payment"
@@ -652,8 +712,8 @@ function createBooking(booking) {
         level: existingRegistration ? existingRegistration.level : "Beginner",
         goal: existingRegistration ? existingRegistration.goal : "Conversation",
         message: booking.message,
-        date: booking.date,
-        time: booking.time
+        date: bookingDate,
+        time: bookingTime
       },
       state.students
     );
