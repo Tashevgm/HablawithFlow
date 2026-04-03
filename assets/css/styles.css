@@ -2195,6 +2195,26 @@ textarea {
   color: #6f635b;
 }
 
+.community-profile-card {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 14px;
+  align-items: center;
+  margin: 4px 0 16px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: #fff8f3;
+}
+
+.community-avatar {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(192, 57, 43, 0.2);
+}
+
 .calendar-toolbar {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -3180,6 +3200,12 @@ textarea {
 
   .group-inline-actions {
     grid-template-columns: 1fr;
+  }
+
+  .community-profile-card {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
   }
 
   .roster-scroll {

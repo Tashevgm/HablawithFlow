@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Profile | Hablawithflow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html" class="nav-logo">Hablawithflow</a>
+      <div class="nav-links">
+        <a href="index.html#about">About</a>
+        <a href="index.html#plans">Lessons</a>
+        <a href="index.html#testimonials">Testimonials</a>
+        <a href="student-portal.html">Student Portal</a>
+        <a href="my-profile.html">My Profile</a>
+        <a href="index.html#booking" class="btn-nav">Book Now</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="site-main portal-main">
+    <section class="portal-hero">
+      <div>
+        <p class="hero-badge">Community Profile</p>
+        <h1>Build your student profile and connect with the Hablawithflow community.</h1>
+        <p class="hero-copy">
+          Share a photo, your learning story, and your goals so your profile feels personal.
+        </p>
+      </div>
+      <div class="portal-hero-card">
+        <div class="stat-stack">
+          <span class="stat-kicker">Community mode</span>
+          <strong class="stat-number stat-word">Student-first profiles</strong>
+          <span class="stat-caption">Only signed-in student accounts can manage this page.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="portal-shell">
+      <div class="auth-card" id="my-profile-login-card" hidden>
+        <h2>Sign in required</h2>
+        <p class="section-sub portal-sub">Open the student portal, sign in, then return to your profile.</p>
+        <a href="student-portal.html" class="btn-submit">Go To Student Portal</a>
+      </div>
+
+      <div id="my-profile-dashboard" hidden>
+        <section class="portal-grid portal-grid-wide">
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2>Profile Card</h2>
+                <p class="portal-sub">How your profile appears in the community.</p>
+              </div>
+            </div>
+
+            <div class="community-profile-card">
+              <img id="my-profile-avatar-preview" class="community-avatar" alt="Your profile photo">
+              <div>
+                <strong id="my-profile-card-name">Your Name</strong>
+                <p id="my-profile-card-headline" class="portal-sub">Add a short headline.</p>
+                <p id="my-profile-card-location" class="portal-sub">Location not set</p>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="my-profile-avatar-file">Profile picture</label>
+              <input type="file" id="my-profile-avatar-file" accept="image/png,image/jpeg,image/webp">
+            </div>
+            <button class="btn-outline" id="my-profile-avatar-upload" type="button">Upload Picture</button>
+            <div id="my-profile-avatar-feedback" class="booking-feedback" hidden></div>
+          </article>
+
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2>Edit My Profile</h2>
+                <p class="portal-sub">Keep this up to date so other learners can connect with you.</p>
+              </div>
+              <div class="portal-shortcuts portal-shortcuts-tight">
+                <a href="student-portal.html" class="btn-outline portal-link">Back To Student Portal</a>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="my-profile-name">Display name</label>
+              <input type="text" id="my-profile-name" maxlength="80">
+            </div>
+
+            <div class="form-group">
+              <label for="my-profile-headline">Headline</label>
+              <input type="text" id="my-profile-headline" maxlength="120" placeholder="e.g. Beginner Spanish learner, London">
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="my-profile-location">Location</label>
+                <input type="text" id="my-profile-location" maxlength="120" placeholder="e.g. London, UK">
+              </div>
+              <div class="form-group">
+                <label for="my-profile-languages">Languages</label>
+                <input type="text" id="my-profile-languages" maxlength="160" placeholder="e.g. English, Spanish">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="my-profile-bio">Bio</label>
+              <textarea id="my-profile-bio" maxlength="1000" placeholder="Tell people about your learning journey."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="my-profile-visibility">Profile visibility</label>
+              <select id="my-profile-visibility">
+                <option value="public">Public to signed-in community</option>
+                <option value="private">Private (only me)</option>
+              </select>
+            </div>
+
+            <button class="btn-submit" id="my-profile-save" type="button">Save Profile</button>
+            <div id="my-profile-feedback" class="booking-feedback" hidden></div>
+          </article>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">Hablawithflow</div>
+        <p class="footer-desc">Teaching Spanish through rhythm, connection, and real-world conversation.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Navigate</h4>
+        <a href="index.html">Public Site</a>
+        <a href="student-portal.html">Student Portal</a>
+        <a href="my-profile.html">My Profile</a>
+      </div>
+      <div class="footer-col">
+        <h4>Teacher</h4>
+        <a href="teacher-login.html">Teacher Login</a>
+        <a href="teacher-students.html">Student Performance</a>
+      </div>
+    </div>
+    <div class="footer-bottom">&copy; 2026 Hablawithflow. All rights reserved.</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/js/supabase-client.js"></script>
+  <script src="assets/js/app-config.js"></script>
+  <script src="assets/js/my-profile.js"></script>
+</body>
+</html>
