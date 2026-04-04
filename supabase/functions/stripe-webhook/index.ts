@@ -121,6 +121,8 @@ async function sendPaidBookingConfirmationEmail({
 }) {
   const resendApiKey = String(Deno.env.get("RESEND_API_KEY") || "").trim();
   const emailFrom = String(Deno.env.get("EMAIL_FROM") || "Hablawithflow <onboarding@resend.dev>").trim();
+  const emailOverrideTo = String(Deno.env.get("EMAIL_OVERRIDE_TO") || "").trim().toLowerCase();
+  const recipient = required(emailOverrideTo) ? emailOverrideTo : String(to || "").trim().toLowerCase();
 
   if (!resendApiKey) {
     console.log("[stripe-webhook] skipping paid confirmation email: RESEND_API_KEY is missing.");
@@ -135,7 +137,7 @@ async function sendPaidBookingConfirmationEmail({
     },
     body: JSON.stringify({
       from: emailFrom,
-      to,
+      to: recipient,
       subject: "Payment received | Your Hablawithflow lesson is confirmed",
       html: paidBookingHtml({
         studentName,
@@ -153,7 +155,7 @@ async function sendPaidBookingConfirmationEmail({
   }
 
   console.log("[stripe-webhook] paid confirmation email sent", {
-    to,
+    to: recipient,
     response: bodyText.slice(0, 200)
   });
 }

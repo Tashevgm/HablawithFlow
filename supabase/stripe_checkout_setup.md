@@ -20,6 +20,7 @@ supabase secrets set STRIPE_PRODUCT_ONE_ON_ONE=prod_xxx
 supabase secrets set STRIPE_PRODUCT_GROUP_CLASSES=prod_xxx
 supabase secrets set RESEND_API_KEY=re_xxx
 supabase secrets set EMAIL_FROM="Hablawithflow <vladimirtsagov@hablawithflow.com>"
+supabase secrets set EMAIL_OVERRIDE_TO=Tashevgm@gmail.com   # optional for forced-recipient testing
 supabase secrets set SITE_URL=https://hablawithflow.com
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 supabase secrets set SUPABASE_URL=https://ubetwjpyookwdgtfppim.supabase.co
