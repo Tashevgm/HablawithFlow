@@ -1132,6 +1132,7 @@ app.get("/api", (request, response) => {
         <li><strong>Registration email:</strong> <code>POST /api/email/register</code></li>
         <li><strong>Booking email:</strong> <code>POST /api/email/booking</code></li>
         <li><strong>Payment pending email:</strong> <code>POST /api/email/payment-pending</code></li>
+        <li><strong>Teacher bookings:</strong> <code>GET /api/teacher/bookings</code></li>
         <li><strong>Owner test email:</strong> <code>POST /api/owner/email-test</code></li>
         <li><strong>Owner reminder trigger:</strong> <code>POST /api/owner/booking-reminders/run</code></li>
         <li><strong>Website:</strong> <a href="/">/</a></li>
@@ -1441,6 +1442,33 @@ app.get("/api/teacher/students", async (request, response) => {
   } catch (error) {
     console.error("Failed to fetch teacher students", error);
     jsonError(response, 500, "Failed to fetch teacher student roster.");
+  }
+});
+
+app.get("/api/teacher/bookings", async (request, response) => {
+  try {
+    const teacherUser = await requireTeacherAccess(request, response);
+    if (!teacherUser) {
+      return;
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("bookings")
+      .select("id, student_id, student_email, student_name, lesson_type, lesson_date, lesson_time, timezone, message, status")
+      .order("lesson_date", { ascending: true })
+      .order("lesson_time", { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    response.json({
+      ok: true,
+      bookings: Array.isArray(data) ? data : []
+    });
+  } catch (error) {
+    console.error("Failed to fetch teacher bookings", error);
+    jsonError(response, 500, "Failed to fetch teacher bookings.");
   }
 });
 

@@ -196,6 +196,11 @@ function getBooking(date, time) {
   );
 }
 
+function getBookingCalendarVariant(booking) {
+  const statusMeta = getBookingStatusMeta(booking?.status);
+  return statusMeta.value === "confirmed_paid" ? "paid" : "reserved";
+}
+
 function getOpenDates() {
   return [...new Set(getAvailability().map((slot) => slot.date))].sort();
 }
@@ -467,6 +472,12 @@ function syncFocusedDateToFocusMonth() {
 }
 
 async function loadServerBookings() {
+  const fromApi = await fetchTeacherBookingsFromServer();
+  if (Array.isArray(fromApi)) {
+    window.HWFServerBookings = fromApi;
+    return true;
+  }
+
   const { data, error } = await window.supabaseClient
     .from("bookings")
     .select("*")
@@ -474,7 +485,6 @@ async function loadServerBookings() {
     .order("lesson_time", { ascending: true });
 
   if (error) {
-    window.HWFServerBookings = [];
     return false;
   }
 
@@ -531,6 +541,47 @@ async function fetchTeacherStudentsFromServer() {
     }
 
     return payload.students;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchTeacherBookingsFromServer() {
+  if (!window.supabaseClient) {
+    return null;
+  }
+
+  const {
+    data: { session }
+  } = await window.supabaseClient.auth.getSession();
+  const accessToken = session?.access_token || "";
+  if (!accessToken) {
+    return null;
+  }
+
+  const configuredApiBase =
+    window.HWF_APP_CONFIG && typeof window.HWF_APP_CONFIG.apiBase === "string"
+      ? window.HWF_APP_CONFIG.apiBase.trim()
+      : "";
+  const apiBase = configuredApiBase || window.location.origin;
+
+  try {
+    const result = await fetch(`${apiBase}/api/teacher/bookings`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    if (!result.ok) {
+      return null;
+    }
+
+    const payload = await result.json();
+    if (!payload || payload.ok !== true || !Array.isArray(payload.bookings)) {
+      return null;
+    }
+
+    return payload.bookings;
   } catch {
     return null;
   }
@@ -894,10 +945,11 @@ function renderWeekCalendar() {
       cell.dataset.time = time;
 
       if (booking) {
-        cell.classList.add("booked");
+        const variant = getBookingCalendarVariant(booking);
+        cell.classList.add("booked", variant === "paid" ? "booked-paid" : "booked-reserved");
         cell.disabled = true;
         cell.innerHTML = `
-          <span class="calendar-cell-label">Booked</span>
+          <span class="calendar-cell-label">${variant === "paid" ? "Paid / booked" : "Reserved"}</span>
           <strong>${booking.studentName}</strong>
           <span>${booking.lessonType}</span>
         `;
@@ -938,8 +990,9 @@ function renderFocusDateGrid() {
 
   ensureFocusedDate();
 
+  const activeBookings = getBookings().filter((booking) => getBookingStatusMeta(booking.status).active);
   const openDates = new Set(getOpenDates());
-  const bookedDates = new Set(getBookings().map((booking) => booking.date));
+  const bookedDates = new Set(activeBookings.map((booking) => booking.date));
   const year = focusMonth.getFullYear();
   const month = focusMonth.getMonth();
   const firstDay = new Date(year, month, 1);
@@ -960,17 +1013,26 @@ function renderFocusDateGrid() {
   for (let day = 1; day <= daysInMonth; day += 1) {
     const date = toIsoDate(new Date(year, month, day));
     const openCount = getAvailability().filter((slot) => slot.date === date).length;
-    const bookedCount = getBookings().filter((booking) => booking.date === date).length;
+    const dayActiveBookings = activeBookings.filter((booking) => booking.date === date);
+    const bookedCount = dayActiveBookings.length;
+    const reservedCount = dayActiveBookings.filter((booking) => getBookingCalendarVariant(booking) === "reserved").length;
+    const paidCount = dayActiveBookings.filter((booking) => getBookingCalendarVariant(booking) === "paid").length;
     const isSelected = date === focusedDate;
 
     let statusClass = "closed";
     let caption = "No slots";
 
     if (bookedDates.has(date)) {
-      statusClass = openDates.has(date) ? "mixed" : "booked";
+      if (paidCount > 0 && reservedCount === 0) {
+        statusClass = openDates.has(date) ? "mixed" : "booked";
+      } else if (reservedCount > 0 && paidCount === 0) {
+        statusClass = openDates.has(date) ? "mixed" : "reserved";
+      } else {
+        statusClass = "mixed";
+      }
       caption = bookedCount > 0 && openCount > 0
-        ? `${openCount} open / ${bookedCount} booked`
-        : `${bookedCount} booked`;
+        ? `${openCount} open / ${reservedCount} reserved / ${paidCount} paid`
+        : `${reservedCount} reserved / ${paidCount} paid`;
     }
 
     if (openDates.has(date)) {
@@ -1014,10 +1076,11 @@ function renderFocusHoursGrid() {
       const booking = getBooking(focusedDate, time);
 
       if (booking) {
+        const variant = getBookingCalendarVariant(booking);
         return `
-          <button class="focus-hour-chip booked" type="button" disabled>
+          <button class="focus-hour-chip booked ${variant === "paid" ? "paid" : "reserved"}" type="button" disabled>
             <strong>${time}</strong>
-            <span>${booking.studentName}</span>
+            <span>${booking.studentName} • ${variant === "paid" ? "Paid / booked" : "Reserved"}</span>
           </button>
         `;
       }

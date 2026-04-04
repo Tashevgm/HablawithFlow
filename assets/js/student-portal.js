@@ -213,6 +213,7 @@ async function openStudentDashboardFromSession() {
   const profile = await loadSupabaseProfile(user);
   currentSupabaseUserId = user.id;
   currentSupabaseUser = user;
+  await loadActiveServerBookingsForAvailability();
   const student = window.HWFData.ensureStudentFromProfile(profile);
   const hydratedStudent = await hydrateStudentFromServer(student);
 
@@ -242,6 +243,33 @@ async function listServerBookingsForCurrentStudent() {
   }
 
   return data;
+}
+
+async function loadActiveServerBookingsForAvailability() {
+  const activeStatuses = ["pending_payment", "payment_submitted", "confirmed_paid"];
+  const { data, error } = await window.supabaseClient
+    .from("bookings")
+    .select("id, lesson_date, lesson_time, status, student_id")
+    .in("status", activeStatuses)
+    .order("lesson_date", { ascending: true })
+    .order("lesson_time", { ascending: true });
+
+  if (error) {
+    return false;
+  }
+
+  window.HWFServerBookings = Array.isArray(data) ? data : [];
+  return true;
+}
+
+function isAvailabilityBlockedByBooking(date, time) {
+  const bookings = Array.isArray(window.HWFServerBookings) ? window.HWFServerBookings : [];
+  return bookings.some((booking) => {
+    const bookingDate = String(booking.lesson_date || booking.date || "");
+    const bookingTime = String(booking.lesson_time || booking.time || "").slice(0, 5);
+    const statusMeta = getBookingStatusMeta(booking.status);
+    return bookingDate === date && bookingTime === time && statusMeta.active;
+  });
 }
 
 async function hydrateStudentFromServer(student) {
@@ -399,11 +427,17 @@ function setStudentReviewFeedback(message, type) {
 }
 
 function getStudentAvailabilityDates() {
-  return [...new Set(window.HWFData.listAvailability().map((slot) => slot.date))].sort();
+  return [...new Set(
+    window.HWFData
+      .listAvailability()
+      .filter((slot) => !isAvailabilityBlockedByBooking(slot.date, slot.time))
+      .map((slot) => slot.date)
+  )].sort();
 }
 
 function getStudentTimesForDate(date) {
   return window.HWFData.listAvailability()
+    .filter((slot) => !isAvailabilityBlockedByBooking(slot.date, slot.time))
     .filter((slot) => slot.date === date)
     .map((slot) => slot.time)
     .sort();
@@ -1034,6 +1068,7 @@ function renderStudentDashboard(student) {
         });
       }
 
+      await loadActiveServerBookingsForAvailability();
       const refreshedStudent = await hydrateStudentFromServer(currentStudent);
       renderStudentDashboard(refreshedStudent);
     };
@@ -1303,6 +1338,7 @@ function bindStudentBookingSection() {
     }
 
     document.getElementById("student-booking-message").value = "";
+    await loadActiveServerBookingsForAvailability();
     const refreshedStudent = await hydrateStudentFromServer(currentStudent);
     renderStudentDashboard(refreshedStudent);
     const bookedLesson = refreshedStudent.upcomingLessons.find((lesson) => {

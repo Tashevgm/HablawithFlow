@@ -2363,6 +2363,10 @@ textarea {
   background: var(--teal);
 }
 
+.legend-dot.reserved {
+  background: var(--gold);
+}
+
 .legend-dot.booked {
   background: var(--red);
 }
@@ -2485,12 +2489,23 @@ textarea {
 }
 
 .calendar-cell.booked {
-  background: rgba(192, 57, 43, 0.14);
   cursor: not-allowed;
 }
 
-.calendar-cell.booked .calendar-cell-label {
+.calendar-cell.booked-paid {
+  background: rgba(192, 57, 43, 0.14);
+}
+
+.calendar-cell.booked-paid .calendar-cell-label {
   color: var(--red);
+}
+
+.calendar-cell.booked-reserved {
+  background: rgba(241, 196, 15, 0.18);
+}
+
+.calendar-cell.booked-reserved .calendar-cell-label {
+  color: #9a5c00;
 }
 
 .calendar-cell.closed {
@@ -2570,6 +2585,11 @@ textarea {
   border-color: rgba(192, 57, 43, 0.16);
 }
 
+.focus-date-cell.reserved {
+  background: rgba(241, 196, 15, 0.12);
+  border-color: rgba(241, 196, 15, 0.36);
+}
+
 .focus-date-cell.mixed {
   background: linear-gradient(135deg, rgba(26, 188, 156, 0.08) 0%, rgba(241, 196, 15, 0.12) 100%);
   border-color: rgba(241, 196, 15, 0.4);
@@ -2620,9 +2640,17 @@ textarea {
 }
 
 .focus-hour-chip.booked {
+  cursor: not-allowed;
+}
+
+.focus-hour-chip.booked.paid {
   background: rgba(192, 57, 43, 0.14);
   border-color: rgba(192, 57, 43, 0.3);
-  cursor: not-allowed;
+}
+
+.focus-hour-chip.booked.reserved {
+  background: rgba(241, 196, 15, 0.16);
+  border-color: rgba(241, 196, 15, 0.4);
 }
 
 .bulk-layout {
