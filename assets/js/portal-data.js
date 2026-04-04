@@ -730,7 +730,9 @@ function addAvailabilitySlot(slot) {
     return { ok: false, error: "Cannot add a slot in the past." };
   }
 
-  const hasBooking = getAuthoritativeBookings().some((entry) => entry.date === date && entry.time === time);
+  const hasBooking = getAuthoritativeBookings().some((entry) => {
+    return entry.date === date && entry.time === time && getBookingStatusMeta(entry.status).active;
+  });
   if (hasBooking) {
     return { ok: false, error: "That time is already booked." };
   }
@@ -766,7 +768,9 @@ function addAvailabilitySlots(slots) {
       return;
     }
 
-    const hasBooking = authoritativeBookings.some((entry) => entry.date === date && entry.time === time);
+    const hasBooking = authoritativeBookings.some((entry) => {
+      return entry.date === date && entry.time === time && getBookingStatusMeta(entry.status).active;
+    });
     const duplicate = state.availability.some((entry) => entry.date === date && entry.time === time);
 
     if (hasBooking || duplicate) {

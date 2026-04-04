@@ -184,7 +184,11 @@ function getOpenSlot(date, time) {
 }
 
 function getBooking(date, time) {
-  return getBookings().find((entry) => entry.date === date && entry.time === time) || null;
+  return (
+    getBookings().find((entry) => {
+      return entry.date === date && entry.time === time && getBookingStatusMeta(entry.status).active;
+    }) || null
+  );
 }
 
 function getOpenDates() {

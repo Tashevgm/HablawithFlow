@@ -756,6 +756,17 @@ function renderStudentDashboard(student) {
         "success"
       );
 
+      const reopenedDate = result.booking && result.booking.lesson_date ? result.booking.lesson_date : "";
+      const reopenedTime = result.booking && result.booking.lesson_time
+        ? String(result.booking.lesson_time).slice(0, 5)
+        : "";
+      if (reopenedDate && reopenedTime && window.HWFData && typeof window.HWFData.addAvailabilitySlot === "function") {
+        window.HWFData.addAvailabilitySlot({
+          date: reopenedDate,
+          time: reopenedTime
+        });
+      }
+
       const refreshedStudent = await hydrateStudentFromServer(currentStudent);
       renderStudentDashboard(refreshedStudent);
     };
