@@ -27,6 +27,20 @@ function getBookingStatusMeta(status) {
   };
 }
 
+function normalizeBookingInsertError(message) {
+  const raw = String(message || "").trim();
+  const normalized = raw.toLowerCase();
+
+  if (
+    normalized.includes("bookings_student_id_lesson_date_lesson_time_key") ||
+    normalized.includes("duplicate key value")
+  ) {
+    return "You already have this lesson booked at that time. Please choose a different slot.";
+  }
+
+  return raw || "Could not save this booking right now.";
+}
+
 function formatStudentDate(date, time) {
   return new Date(`${date}T${time}`).toLocaleDateString("en-GB", {
     weekday: "short",
@@ -260,6 +274,29 @@ async function saveServerBooking({ studentName, email, date, time, lessonType, m
     return { ok: false, error: "You must be signed in to save a booking." };
   }
 
+  const activeStatuses = ["pending_payment", "payment_submitted", "confirmed_paid"];
+  const { data: existingAtTime, error: existingAtTimeError } = await window.supabaseClient
+    .from("bookings")
+    .select("id, student_id, status")
+    .eq("lesson_date", date)
+    .eq("lesson_time", time)
+    .in("status", activeStatuses)
+    .limit(1);
+
+  if (existingAtTimeError) {
+    return { ok: false, error: existingAtTimeError.message };
+  }
+
+  if (Array.isArray(existingAtTime) && existingAtTime.length > 0) {
+    const alreadyMine = existingAtTime.some((entry) => String(entry.student_id || "") === String(currentSupabaseUserId));
+    return {
+      ok: false,
+      error: alreadyMine
+        ? "You already have this lesson booked at that time."
+        : "This lesson time has already been reserved. Please choose another time."
+    };
+  }
+
   const { data, error } = await window.supabaseClient
     .from("bookings")
     .insert({
@@ -277,7 +314,7 @@ async function saveServerBooking({ studentName, email, date, time, lessonType, m
     .single();
 
   if (error) {
-    return { ok: false, error: error.message };
+    return { ok: false, error: normalizeBookingInsertError(error.message) };
   }
 
   return { ok: true, booking: data };

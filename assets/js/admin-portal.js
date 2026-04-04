@@ -292,6 +292,19 @@ async function loadServerBookings() {
   return true;
 }
 
+async function ensureFreshBookingsForAvailabilityUpdate() {
+  const loaded = await loadServerBookings();
+  if (!loaded) {
+    setDashboardActionError(
+      "Could not verify reserved lessons from the server. Refresh and try again before changing availability."
+    );
+    return false;
+  }
+
+  clearDashboardActionError();
+  return true;
+}
+
 async function fetchTeacherStudentsFromServer() {
   if (!window.supabaseClient) {
     return null;
@@ -542,7 +555,11 @@ async function openTeacherDashboardFromSession() {
   return true;
 }
 
-function toggleSlot(date, time) {
+async function toggleSlot(date, time) {
+  if (!(await ensureFreshBookingsForAvailabilityUpdate())) {
+    return;
+  }
+
   const error = byId("slot-error");
   const booking = getBooking(date, time);
 
@@ -709,7 +726,7 @@ function renderWeekCalendar() {
 
   calendar.querySelectorAll(".calendar-cell:not(.booked)").forEach((cell) => {
     cell.addEventListener("click", () => {
-      toggleSlot(cell.dataset.date, cell.dataset.time);
+      void toggleSlot(cell.dataset.date, cell.dataset.time);
     });
   });
 }
@@ -828,7 +845,7 @@ function renderFocusHoursGrid() {
 
   grid.querySelectorAll(".focus-hour-chip:not(.booked)").forEach((button) => {
     button.addEventListener("click", () => {
-      toggleSlot(focusedDate, button.dataset.time);
+      void toggleSlot(focusedDate, button.dataset.time);
     });
   });
 }
@@ -1464,8 +1481,14 @@ function bindBulkControls() {
     });
   });
 
-  byId("bulk-add").addEventListener("click", () => {
+  byId("bulk-add").addEventListener("click", async () => {
     const error = byId("slot-error");
+    if (!(await ensureFreshBookingsForAvailabilityUpdate())) {
+      error.hidden = false;
+      error.textContent = "Could not verify reserved lessons from server. Refresh and try again.";
+      return;
+    }
+
     const result = buildBulkSlots();
 
     if (!result.ok) {
