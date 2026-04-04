@@ -90,6 +90,30 @@ function ensureSupabaseAdmin(response) {
   return true;
 }
 
+function publicErrorMessage(fallback, error) {
+  const message = String(error?.message || "").trim();
+  return required(message) ? `${fallback} ${message}` : fallback;
+}
+
+async function sendEmailWithResend(payload, label) {
+  if (!resend) {
+    throw new Error("Resend is not configured. Add RESEND_API_KEY to the server environment.");
+  }
+
+  const result = await resend.emails.send(payload);
+  if (result?.error) {
+    const resendMessage = String(result.error.message || "Unknown Resend error.").trim();
+    const context = required(label) ? `${label}: ` : "";
+    const statusCode = Number(result.error.statusCode) || 500;
+    const error = new Error(`Resend rejected email (${context}${resendMessage})`);
+    error.statusCode = statusCode;
+    error.resend = result.error;
+    throw error;
+  }
+
+  return result;
+}
+
 function escapeHtml(value) {
   return String(value || "")
     .replace(/&/g, "&amp;")
@@ -497,7 +521,7 @@ async function sendBookingEmails({
   source
 }) {
   const sends = [
-    resend.emails.send({
+    sendEmailWithResend({
       from: emailFrom,
       to: email,
       subject: studentSubject || "Your Hablawithflow lesson is confirmed",
@@ -510,13 +534,13 @@ async function sendBookingEmails({
         accountSetupUrl,
         isExistingStudent
       })
-    })
+    }, "student booking confirmation")
   ];
 
   const teacherRecipients = listBookingNotificationRecipients();
   if (teacherRecipients.length) {
     sends.push(
-      resend.emails.send({
+      sendEmailWithResend({
         from: emailFrom,
         to: teacherRecipients,
         subject: teacherSubject || `New booking: ${studentName} on ${date} ${time}`,
@@ -530,7 +554,7 @@ async function sendBookingEmails({
           heading: teacherHeading,
           source
         })
-      })
+      }, "teacher booking notification")
     );
   }
 
@@ -649,7 +673,7 @@ async function processBookingReminderBatch() {
       const lessonType = required(booking.lesson_type) ? booking.lesson_type.trim() : "Spanish lesson";
       const lessonStartLabel = formatLessonStartLabel(booking.lesson_date, booking.lesson_time, booking.timezone || lessonTimezoneDefault);
 
-      await resend.emails.send({
+      await sendEmailWithResend({
         from: emailFrom,
         to: booking.student_email,
         subject: `Reminder: your lesson starts in ${bookingReminderMinutes} minutes`,
@@ -660,7 +684,7 @@ async function processBookingReminderBatch() {
           meetLink: googleMeetLink.trim(),
           minutesBefore: bookingReminderMinutes
         })
-      });
+      }, "lesson reminder");
 
       const { error: updateError } = await supabaseAdmin
         .from("bookings")
@@ -1014,7 +1038,7 @@ async function registerTeacherAccess({ name, email, timezone, bio, hourlyRate, s
 
   let inviteEmailSent = false;
   if (!existingUser && required(accountSetupUrl) && resend) {
-    await resend.emails.send({
+    await sendEmailWithResend({
       from: emailFrom,
       to: normalizedEmail,
       subject: "Your Hablawithflow teacher account is ready",
@@ -1022,7 +1046,7 @@ async function registerTeacherAccess({ name, email, timezone, bio, hourlyRate, s
         teacherName,
         accountSetupUrl
       })
-    });
+    }, "teacher invite");
     inviteEmailSent = true;
   }
 
@@ -1042,6 +1066,7 @@ app.get("/api", (request, response) => {
         <li><strong>Health:</strong> <a href="/api/health">/api/health</a></li>
         <li><strong>Registration email:</strong> <code>POST /api/email/register</code></li>
         <li><strong>Booking email:</strong> <code>POST /api/email/booking</code></li>
+        <li><strong>Owner test email:</strong> <code>POST /api/owner/email-test</code></li>
         <li><strong>Owner reminder trigger:</strong> <code>POST /api/owner/booking-reminders/run</code></li>
         <li><strong>Website:</strong> <a href="/">/</a></li>
       </ul>
@@ -1052,7 +1077,15 @@ app.get("/api", (request, response) => {
 app.get("/api/health", (request, response) => {
   response.json({
     ok: true,
-    service: "hablawithflow-app-backend"
+    service: "hablawithflow-app-backend",
+    email: {
+      provider: "resend",
+      configured: Boolean(resendApiKey),
+      from: emailFrom,
+      ownerConfigured: required(ownerEmail),
+      teacherNotificationRecipients: listBookingNotificationRecipients().length
+    },
+    supabaseAdminConfigured: Boolean(supabaseAdmin)
   });
 });
 
@@ -1118,7 +1151,7 @@ app.post("/api/teacher-invite/register", async (request, response) => {
     });
   } catch (error) {
     console.error("Failed to register teacher from invite link", error);
-    jsonError(response, 500, "Failed to register teacher account.");
+    jsonError(response, 500, publicErrorMessage("Failed to register teacher account.", error));
   }
 });
 
@@ -1156,7 +1189,7 @@ app.post("/api/teacher/register", async (request, response) => {
     });
   } catch (error) {
     console.error("Failed to register teacher from private portal", error);
-    jsonError(response, 500, "Failed to register teacher account.");
+    jsonError(response, 500, publicErrorMessage("Failed to register teacher account.", error));
   }
 });
 
@@ -1273,7 +1306,7 @@ app.post("/api/booking/confirm-email-complete", async (request, response) => {
     });
   } catch (error) {
     console.error("Failed to complete booking after confirmation", error);
-    jsonError(response, 500, "Failed to finalize booking after email confirmation.");
+    jsonError(response, 500, publicErrorMessage("Failed to finalize booking after email confirmation.", error));
   }
 });
 
@@ -1423,14 +1456,14 @@ app.post("/api/owner/password-reset", async (request, response) => {
 
     let emailSent = false;
     if (resend) {
-      await resend.emails.send({
+      await sendEmailWithResend({
         from: emailFrom,
         to: normalizedEmail,
         subject: "Reset your Hablawithflow owner password",
         html: ownerPasswordResetHtml({
           resetUrl
         })
-      });
+      }, "owner password reset");
       emailSent = true;
     }
 
@@ -1444,7 +1477,56 @@ app.post("/api/owner/password-reset", async (request, response) => {
     });
   } catch (error) {
     console.error("Failed to send owner password reset", error);
-    jsonError(response, 500, "Failed to send owner password reset.");
+    jsonError(response, 500, publicErrorMessage("Failed to send owner password reset.", error));
+  }
+});
+
+app.post("/api/owner/email-test", async (request, response) => {
+  try {
+    const ownerUser = await requireOwnerAccess(request, response);
+    if (!ownerUser) {
+      return;
+    }
+
+    if (!ensureEmailServer(response)) {
+      return;
+    }
+
+    const { to, subject } = request.body || {};
+    const targetEmail = required(to)
+      ? to.trim().toLowerCase()
+      : required(ownerUser.email)
+        ? ownerUser.email.trim().toLowerCase()
+        : ownerEmail.trim().toLowerCase();
+
+    if (!required(targetEmail)) {
+      jsonError(response, 400, "Missing recipient email for test send.");
+      return;
+    }
+
+    const testSubject = required(subject)
+      ? subject.trim()
+      : `Hablawithflow email test - ${new Date().toISOString()}`;
+
+    await sendEmailWithResend({
+      from: emailFrom,
+      to: targetEmail,
+      subject: testSubject,
+      html: `
+        <p><strong>Resend connection:</strong> OK</p>
+        <p><strong>Sent at:</strong> ${escapeHtml(new Date().toISOString())}</p>
+        <p><strong>Server:</strong> Hablawithflow API</p>
+      `
+    }, "owner email test");
+
+    response.json({
+      ok: true,
+      message: `Test email sent to ${targetEmail}.`,
+      to: targetEmail
+    });
+  } catch (error) {
+    console.error("Failed to send owner test email", error);
+    jsonError(response, 500, publicErrorMessage("Failed to send test email.", error));
   }
 });
 
@@ -1484,7 +1566,7 @@ app.post("/api/owner/teacher-register", async (request, response) => {
     });
   } catch (error) {
     console.error("Failed to register teacher account", error);
-    jsonError(response, 500, "Failed to register teacher account.");
+    jsonError(response, 500, publicErrorMessage("Failed to register teacher account.", error));
   }
 });
 
@@ -1502,7 +1584,7 @@ app.post("/api/email/register", async (request, response) => {
 
   try {
     const sends = [
-      resend.emails.send({
+      sendEmailWithResend({
         from: emailFrom,
         to: email,
         subject: "Bienvenido to Hablawithflow | Your registration is confirmed",
@@ -1513,12 +1595,12 @@ app.post("/api/email/register", async (request, response) => {
           goal,
           timezone: required(timezone) ? timezone : "Not set"
         })
-      })
+      }, "student registration confirmation")
     ];
 
     if (required(ownerEmail)) {
       sends.push(
-        resend.emails.send({
+        sendEmailWithResend({
           from: emailFrom,
           to: ownerEmail,
           subject: `New registration: ${name}`,
@@ -1529,7 +1611,7 @@ app.post("/api/email/register", async (request, response) => {
             <p><strong>Goal:</strong> ${goal}</p>
             <p><strong>Timezone:</strong> ${required(timezone) ? timezone : "Not set"}</p>
           `
-        })
+        }, "owner registration notification")
       );
     }
 
@@ -1541,7 +1623,7 @@ app.post("/api/email/register", async (request, response) => {
     });
   } catch (error) {
     console.error("Failed to send registration email", error);
-    jsonError(response, 500, "Failed to send registration email.");
+    jsonError(response, 500, publicErrorMessage("Failed to send registration email.", error));
   }
 });
 
@@ -1578,7 +1660,7 @@ app.post("/api/email/booking", async (request, response) => {
     });
   } catch (error) {
     console.error("Failed to send booking email", error);
-    jsonError(response, 500, "Failed to send booking email.");
+    jsonError(response, 500, publicErrorMessage("Failed to send booking email.", error));
   }
 });
 
@@ -1641,7 +1723,7 @@ app.post("/api/email/trial-booking", async (request, response) => {
     });
   } catch (error) {
     console.error("Failed to send trial booking email", error);
-    jsonError(response, 500, "Failed to send trial booking email.");
+    jsonError(response, 500, publicErrorMessage("Failed to send trial booking email.", error));
   }
 });
 
@@ -1662,7 +1744,7 @@ app.post("/api/email/teacher-interest", async (request, response) => {
 
     if (required(ownerEmail)) {
       sends.push(
-        resend.emails.send({
+        sendEmailWithResend({
           from: emailFrom,
           to: ownerEmail,
           subject: `Teacher application interest: ${name}`,
@@ -1672,12 +1754,12 @@ app.post("/api/email/teacher-interest", async (request, response) => {
             <p><strong>Message:</strong></p>
             <p>${escapeHtml(message).replace(/\n/g, "<br>")}</p>
           `
-        })
+        }, "owner teacher-interest notification")
       );
     }
 
     sends.push(
-      resend.emails.send({
+      sendEmailWithResend({
         from: emailFrom,
         to: email,
         subject: "We received your teacher application interest",
@@ -1701,7 +1783,7 @@ app.post("/api/email/teacher-interest", async (request, response) => {
             </div>
           </div>
         `
-      })
+      }, "teacher-interest confirmation")
     );
 
     await Promise.all(sends);
@@ -1712,7 +1794,7 @@ app.post("/api/email/teacher-interest", async (request, response) => {
     });
   } catch (error) {
     console.error("Failed to send teacher interest email", error);
-    jsonError(response, 500, "Failed to send teacher interest email.");
+    jsonError(response, 500, publicErrorMessage("Failed to send teacher interest email.", error));
   }
 });
 
