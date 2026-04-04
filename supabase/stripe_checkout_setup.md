@@ -18,6 +18,8 @@ supabase secrets set STRIPE_CURRENCY=gbp
 supabase secrets set STRIPE_LESSON_PRICE_MINOR=2000
 supabase secrets set STRIPE_PRODUCT_ONE_ON_ONE=prod_xxx
 supabase secrets set STRIPE_PRODUCT_GROUP_CLASSES=prod_xxx
+supabase secrets set RESEND_API_KEY=re_xxx
+supabase secrets set EMAIL_FROM="Hablawithflow <vladimirtsagov@hablawithflow.com>"
 supabase secrets set SITE_URL=https://hablawithflow.com
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 supabase secrets set SUPABASE_URL=https://ubetwjpyookwdgtfppim.supabase.co
@@ -49,6 +51,7 @@ Subscribe to:
 - Checkout is created in Stripe for booked lessons that are still unpaid
 - The first active lesson stays free and is excluded server-side
 - Stripe webhook marks paid lessons as `confirmed_paid`
+- Stripe webhook sends a payment-confirmation email to the student after status changes to `confirmed_paid`
 - Student `Pay Now` uses the booking `lesson_type` to choose:
   - `STRIPE_PRODUCT_ONE_ON_ONE`
   - `STRIPE_PRODUCT_GROUP_CLASSES`
