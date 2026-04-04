@@ -461,6 +461,60 @@ function bookingHtml({ studentName, date, time, lessonType, message, accountSetu
   `;
 }
 
+function paymentPendingHtml({ studentName, date, time, lessonType }) {
+  const safeName = escapeHtml(studentName);
+  const safeLessonType = escapeHtml(lessonType);
+  const portalUrl = toPortalUrl("/student-portal.html");
+
+  return `
+    <div style="margin:0;padding:32px 16px;background:#f6f1ea;font-family:Arial,sans-serif;color:#1a1a1a;">
+      <div style="max-width:640px;margin:0 auto;background:#fffdf9;border:1px solid #eadfd7;border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,0.08);">
+        <div style="padding:18px 28px;background:linear-gradient(135deg,#c0392b 0%,#cf4c35 100%);color:#ffffff;">
+          <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700;opacity:0.86;">Payment Required</div>
+          <h1 style="margin:10px 0 0;font-size:30px;line-height:1.15;font-family:Georgia,serif;font-weight:700;">Your lesson is reserved</h1>
+        </div>
+
+        <div style="padding:32px 28px;">
+          <p style="margin:0 0 14px;font-size:18px;line-height:1.6;">Hi ${safeName},</p>
+          <p style="margin:0 0 22px;font-size:16px;line-height:1.7;color:#514741;">
+            Your lesson slot is now reserved. Please complete payment in your student portal so the class is fully confirmed.
+          </p>
+
+          <div style="margin:0 0 24px;padding:20px;border-radius:18px;background:#fbf5ef;border:1px solid #efe1d5;">
+            <div style="margin:0 0 14px;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;color:#8c5a47;">
+              Reserved lesson
+            </div>
+            <table role="presentation" style="width:100%;border-collapse:collapse;">
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Date</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${escapeHtml(formatLessonDate(date))}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Time</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${escapeHtml(time)}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;color:#8a7c74;font-size:14px;">Lesson type</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;font-weight:700;color:#1a1a1a;">${safeLessonType}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="margin:0 0 24px;">
+            <a href="${portalUrl}" style="display:inline-block;padding:14px 22px;border-radius:10px;background:#c0392b;color:#ffffff;text-decoration:none;font-weight:700;">
+              Open Student Portal to Pay
+            </a>
+          </div>
+
+          <p style="margin:0;font-size:14px;line-height:1.7;color:#7c6e67;">
+            Inside the portal, open your upcoming lesson and click <strong>Pay Now</strong>.
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function teacherBookingHtml({ studentName, email, date, time, lessonType, message, heading, source }) {
   const safeHeading = escapeHtml(heading || "A new lesson has been booked");
   const safeSource = escapeHtml(source || "Website booking flow");
@@ -1077,6 +1131,7 @@ app.get("/api", (request, response) => {
         <li><strong>Health:</strong> <a href="/api/health">/api/health</a></li>
         <li><strong>Registration email:</strong> <code>POST /api/email/register</code></li>
         <li><strong>Booking email:</strong> <code>POST /api/email/booking</code></li>
+        <li><strong>Payment pending email:</strong> <code>POST /api/email/payment-pending</code></li>
         <li><strong>Owner test email:</strong> <code>POST /api/owner/email-test</code></li>
         <li><strong>Owner reminder trigger:</strong> <code>POST /api/owner/booking-reminders/run</code></li>
         <li><strong>Website:</strong> <a href="/">/</a></li>
@@ -1680,6 +1735,43 @@ app.post("/api/email/booking", async (request, response) => {
   } catch (error) {
     console.error("Failed to send booking email", error);
     jsonError(response, 500, publicErrorMessage("Failed to send booking email.", error));
+  }
+});
+
+app.post("/api/email/payment-pending", async (request, response) => {
+  if (!ensureEmailServer(response)) {
+    return;
+  }
+
+  const { studentName, email, date, time, lessonType } = request.body || {};
+  if (![studentName, email, date, time, lessonType].every(required)) {
+    jsonError(response, 400, "Missing payment pending email fields.");
+    return;
+  }
+
+  try {
+    await sendEmailWithResend(
+      {
+        from: emailFrom,
+        to: email,
+        subject: "Lesson reserved | Please complete your payment",
+        html: paymentPendingHtml({
+          studentName,
+          date,
+          time,
+          lessonType
+        })
+      },
+      "student payment pending reminder"
+    );
+
+    response.json({
+      ok: true,
+      message: "Payment pending email sent."
+    });
+  } catch (error) {
+    console.error("Failed to send payment pending email", error);
+    jsonError(response, 500, publicErrorMessage("Failed to send payment pending email.", error));
   }
 });
 

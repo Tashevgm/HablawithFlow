@@ -29,8 +29,14 @@ async function sendEmailRequest(path, payload, options = {}) {
 
   const data = await response.json().catch(() => ({ ok: false, error: "Invalid email server response." }));
 
-  if (!response.ok || !data.ok) {
-    throw new Error(data.error || `Email request failed with status ${response.status}.`);
+  if (!response.ok) {
+    const error = new Error(data.error || `Email request failed with status ${response.status}.`);
+    error.status = response.status;
+    throw error;
+  }
+
+  if (!data.ok) {
+    throw new Error(data.error || "Email request failed.");
   }
 
   return data;
@@ -42,6 +48,18 @@ window.HWFEmailApi = {
   },
   sendBookingEmail(payload) {
     return sendEmailRequest("/api/email/booking", payload);
+  },
+  sendPaymentPendingEmail(payload) {
+    return sendEmailRequest("/api/email/payment-pending", payload).catch((error) => {
+      if (Number(error?.status) === 404) {
+        return sendEmailRequest("/api/email/booking", {
+          ...payload,
+          message: "Payment pending reminder fallback."
+        });
+      }
+
+      throw error;
+    });
   },
   sendTrialBookingEmail(payload) {
     return sendEmailRequest("/api/email/trial-booking", payload);

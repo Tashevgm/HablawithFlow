@@ -30,6 +30,10 @@ body {
   overflow-x: hidden;
 }
 
+body.portal-app .site-header {
+  display: none;
+}
+
 img,
 svg {
   display: block;
@@ -1165,6 +1169,39 @@ textarea {
   width: 100%;
 }
 
+.portal-profile-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 22px;
+  align-items: start;
+}
+
+.portal-profile-avatar-wrap {
+  display: grid;
+  gap: 10px;
+}
+
+.portal-profile-avatar-wrap label {
+  color: var(--mid);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.portal-profile-avatar {
+  width: 220px;
+  height: 220px;
+  border-radius: 20px;
+  object-fit: cover;
+  border: 2px solid var(--border);
+  background: #f4eeea;
+}
+
+.portal-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
 .booking-feedback {
   margin-top: 14px;
   padding: 12px 14px;
@@ -2232,6 +2269,19 @@ textarea {
   background: #f3eee9;
 }
 
+.student-section-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 20px;
+}
+
+.student-section-profile-link {
+  min-width: 150px;
+  text-align: center;
+}
+
 .view-switch-btn {
   padding: 10px 16px;
   border: 0;
@@ -2255,6 +2305,25 @@ textarea {
 
 .calendar-view.active {
   display: block;
+}
+
+.student-portal-section[hidden] {
+  display: none !important;
+}
+
+.student-portal-section.active {
+  display: block;
+}
+
+.student-setup-panel {
+  width: min(640px, 100%);
+}
+
+.student-setup-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 18px;
 }
 
 .calendar-nav {
@@ -2956,6 +3025,18 @@ textarea {
     gap: 40px;
   }
 
+  .portal-profile-layout,
+  .portal-profile-grid,
+  .student-setup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-profile-avatar {
+    width: min(100%, 260px);
+    height: auto;
+    aspect-ratio: 1 / 1;
+  }
+
   .plans-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -3157,6 +3238,10 @@ textarea {
   .teacher-entry-grid,
   .portal-booking-grid,
   .portal-column-stack {
+    gap: 16px;
+  }
+
+  .portal-profile-layout {
     gap: 16px;
   }
 

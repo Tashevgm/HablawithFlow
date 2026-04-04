@@ -11,6 +11,11 @@ let currentWeekStart = getStartOfWeek(new Date());
 let currentView = "week";
 let focusMonth = new Date();
 let focusedDate = "";
+let currentTeacherUser = null;
+let currentTeacherRole = "";
+let teacherProfileEditorBound = false;
+const DEFAULT_PROFILE_AVATAR =
+  "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80";
 window.HWFServerBookings = window.HWFServerBookings || [];
 
 function getPasswordResetRedirect() {
@@ -241,6 +246,191 @@ function clearTeacherLoginFeedback() {
 
   feedback.hidden = true;
   feedback.textContent = "";
+}
+
+function setTeacherProfileFeedback(message, type) {
+  const feedback = byId("teacher-profile-feedback");
+  if (!feedback) {
+    return;
+  }
+
+  feedback.textContent = message;
+  feedback.className = `booking-feedback ${type}`;
+  feedback.hidden = false;
+}
+
+function updateTeacherProfileAvatarPreview() {
+  const avatarInput = byId("teacher-profile-avatar-url");
+  const preview = byId("teacher-profile-avatar-preview");
+  if (!avatarInput || !preview) {
+    return;
+  }
+
+  const avatarUrl = String(avatarInput.value || "").trim();
+  preview.src = avatarUrl || DEFAULT_PROFILE_AVATAR;
+}
+
+function renderTeacherProfileEditor(profile) {
+  const nameInput = byId("teacher-profile-name");
+  const emailInput = byId("teacher-profile-email");
+  const timezoneInput = byId("teacher-profile-timezone");
+  const roleInput = byId("teacher-profile-role");
+  const bioInput = byId("teacher-profile-bio");
+  const avatarInput = byId("teacher-profile-avatar-url");
+  const preview = byId("teacher-profile-avatar-preview");
+
+  if (!nameInput || !emailInput || !timezoneInput || !roleInput || !bioInput || !avatarInput || !preview) {
+    return;
+  }
+
+  nameInput.value = profile.fullName;
+  emailInput.value = profile.email;
+  timezoneInput.value = profile.timezone;
+  roleInput.value = profile.role;
+  bioInput.value = profile.bio;
+  avatarInput.value = profile.avatarUrl;
+  preview.src = profile.avatarUrl || DEFAULT_PROFILE_AVATAR;
+}
+
+async function loadTeacherProfileEditor() {
+  if (!currentTeacherUser) {
+    return;
+  }
+
+  if (!byId("teacher-profile-name")) {
+    return;
+  }
+
+  const [profileResult, teacherProfileResult] = await Promise.all([
+    window.supabaseClient
+      .from("profiles")
+      .select("full_name, timezone, notes")
+      .eq("id", currentTeacherUser.id)
+      .maybeSingle(),
+    window.supabaseClient
+      .from("teacher_profiles")
+      .select("bio, timezone")
+      .eq("id", currentTeacherUser.id)
+      .maybeSingle()
+  ]);
+
+  const metadata = currentTeacherUser.user_metadata || {};
+  const fullName = String(
+    profileResult.data?.full_name || metadata.full_name || metadata.name || currentTeacherUser.email.split("@")[0]
+  ).trim();
+  const timezone = String(
+    profileResult.data?.timezone || teacherProfileResult.data?.timezone || metadata.timezone || "Europe/London"
+  ).trim();
+  const bio = String(
+    teacherProfileResult.data?.bio || profileResult.data?.notes || metadata.notes || ""
+  ).trim();
+  const avatarUrl = String(metadata.avatar_url || "").trim();
+
+  renderTeacherProfileEditor({
+    fullName,
+    email: currentTeacherUser.email || "",
+    timezone,
+    role: currentTeacherRole || "teacher",
+    bio,
+    avatarUrl
+  });
+}
+
+function bindTeacherProfileEditor() {
+  if (teacherProfileEditorBound) {
+    return;
+  }
+
+  const saveButton = byId("teacher-profile-save");
+  const avatarInput = byId("teacher-profile-avatar-url");
+  if (!saveButton || !avatarInput) {
+    return;
+  }
+
+  avatarInput.addEventListener("input", updateTeacherProfileAvatarPreview);
+
+  saveButton.addEventListener("click", async () => {
+    if (!currentTeacherUser) {
+      setTeacherProfileFeedback("Sign in again to update profile.", "error");
+      return;
+    }
+
+    const fullName = String(byId("teacher-profile-name")?.value || "").trim();
+    const timezone = String(byId("teacher-profile-timezone")?.value || "").trim();
+    const bio = String(byId("teacher-profile-bio")?.value || "").trim();
+    const avatarUrl = String(byId("teacher-profile-avatar-url")?.value || "").trim();
+
+    if (!fullName) {
+      setTeacherProfileFeedback("Full name is required.", "error");
+      return;
+    }
+
+    saveButton.disabled = true;
+    try {
+      const { error: profileError } = await window.supabaseClient.from("profiles").upsert({
+        id: currentTeacherUser.id,
+        full_name: fullName,
+        role: currentTeacherRole || "teacher",
+        timezone: timezone || "Europe/London",
+        notes: bio,
+        track: "Teacher",
+        goal: "Teach on Hablawithflow"
+      });
+
+      if (profileError) {
+        setTeacherProfileFeedback(profileError.message || "Could not save teacher profile.", "error");
+        return;
+      }
+
+      const { error: teacherProfileError } = await window.supabaseClient.from("teacher_profiles").upsert({
+        id: currentTeacherUser.id,
+        bio: bio || null,
+        timezone: timezone || "Europe/London"
+      });
+
+      if (teacherProfileError) {
+        setTeacherProfileFeedback(teacherProfileError.message || "Could not save teacher profile.", "error");
+        return;
+      }
+
+      const metadataPayload = {
+        full_name: fullName,
+        timezone: timezone || "Europe/London",
+        notes: bio,
+        avatar_url: avatarUrl || ""
+      };
+
+      const { error: authError } = await window.supabaseClient.auth.updateUser({
+        data: metadataPayload
+      });
+
+      if (!authError) {
+        currentTeacherUser = {
+          ...currentTeacherUser,
+          user_metadata: {
+            ...(currentTeacherUser.user_metadata || {}),
+            ...metadataPayload
+          }
+        };
+      }
+
+      await loadTeacherProfileEditor();
+
+      if (authError) {
+        setTeacherProfileFeedback(
+          `Profile saved, but auth metadata update failed: ${authError.message || "Unknown error"}`,
+          "error"
+        );
+        return;
+      }
+
+      setTeacherProfileFeedback("Teacher profile updated.", "success");
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+
+  teacherProfileEditorBound = true;
 }
 
 function ensureFocusedDate() {
@@ -528,6 +718,8 @@ async function openTeacherDashboardFromSession() {
   } = await window.supabaseClient.auth.getUser();
 
   if (!user) {
+    currentTeacherUser = null;
+    currentTeacherRole = "";
     if (IS_TEACHER_CALENDAR_PAGE || IS_TEACHER_STUDENTS_PAGE) {
       redirectToTeacherLogin();
     }
@@ -536,6 +728,8 @@ async function openTeacherDashboardFromSession() {
 
   const roleResult = await getTeacherRoleForUser(user.id);
   if (!roleResult.ok) {
+    currentTeacherUser = null;
+    currentTeacherRole = "";
     await window.supabaseClient.auth.signOut();
     if (IS_TEACHER_LOGIN_PAGE) {
       showTeacherError(roleResult.error);
@@ -550,8 +744,11 @@ async function openTeacherDashboardFromSession() {
     return true;
   }
 
+  currentTeacherUser = user;
+  currentTeacherRole = roleResult.role || "teacher";
   clearTeacherError();
   await showTeacherDashboard();
+  await loadTeacherProfileEditor();
   return true;
 }
 
@@ -1648,6 +1845,8 @@ function bindTeacherLogout() {
   }
 
   button.addEventListener("click", async () => {
+    currentTeacherUser = null;
+    currentTeacherRole = "";
     if (window.supabaseClient) {
       await window.supabaseClient.auth.signOut();
     }
@@ -1657,6 +1856,7 @@ function bindTeacherLogout() {
 
 async function initAdminPortal() {
   window.HWFData.ensurePortalState();
+  bindTeacherProfileEditor();
   bindTeacherAuth();
   bindTeacherInterestForm();
   bindCalendarControls();

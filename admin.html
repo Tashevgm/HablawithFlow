@@ -12,7 +12,7 @@
   >
   <link rel="stylesheet" href="assets/css/styles.css">
 </head>
-<body>
+<body class="portal-app">
   <header class="site-header">
     <nav class="nav" aria-label="Primary">
       <a href="index.html" class="nav-logo">Hablawithflow</a>
@@ -63,6 +63,62 @@
                 <strong>Progress lives in one place</strong>
                 <em>Jump into the student performance page when you need learning details.</em>
               </article>
+            </div>
+          </article>
+        </section>
+
+        <section class="portal-grid portal-grid-full">
+          <article class="dashboard-card">
+            <div class="card-heading">
+              <div>
+                <h2>Teacher Profile</h2>
+                <p class="portal-sub">Keep your teacher details up to date inside the portal.</p>
+              </div>
+            </div>
+
+            <div class="portal-profile-layout">
+              <div class="portal-profile-avatar-wrap">
+                <img
+                  id="teacher-profile-avatar-preview"
+                  class="portal-profile-avatar"
+                  src="https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80"
+                  alt="Teacher profile avatar"
+                >
+                <label for="teacher-profile-avatar-url">Profile picture URL</label>
+                <input type="url" id="teacher-profile-avatar-url" placeholder="https://...">
+              </div>
+
+              <div>
+                <div class="portal-profile-grid">
+                  <div class="form-group">
+                    <label for="teacher-profile-name">Full name</label>
+                    <input type="text" id="teacher-profile-name" maxlength="80">
+                  </div>
+                  <div class="form-group">
+                    <label for="teacher-profile-email">Email</label>
+                    <input type="email" id="teacher-profile-email" readonly>
+                  </div>
+                </div>
+
+                <div class="portal-profile-grid">
+                  <div class="form-group">
+                    <label for="teacher-profile-timezone">Timezone</label>
+                    <input type="text" id="teacher-profile-timezone" maxlength="80" placeholder="e.g. Europe/London">
+                  </div>
+                  <div class="form-group">
+                    <label for="teacher-profile-role">Role</label>
+                    <input type="text" id="teacher-profile-role" readonly>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="teacher-profile-bio">Bio / note</label>
+                  <textarea id="teacher-profile-bio" maxlength="600" placeholder="Tell students about your teaching approach."></textarea>
+                </div>
+
+                <button class="btn-submit" id="teacher-profile-save" type="button">Save Teacher Profile</button>
+                <div id="teacher-profile-feedback" class="booking-feedback" hidden></div>
+              </div>
             </div>
           </article>
         </section>

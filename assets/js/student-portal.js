@@ -3,11 +3,22 @@ const STUDENT_BOOKING_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun
 
 let currentStudent = null;
 let currentSupabaseUserId = "";
+let currentSupabaseUser = null;
 let selectedStudentRating = 0;
 let studentBookingMonth = null;
 let selectedStudentBookingDate = "";
 let selectedStudentBookingTime = "";
+let studentProfileEditorBound = false;
+let studentSectionNavBound = false;
+let studentSetupModalBound = false;
+let activeStudentPortalSection = "book";
 const TEACHER_PORTAL_ROLES = new Set(["teacher", "admin"]);
+const DEFAULT_PROFILE_AVATAR =
+  "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80";
+
+function hasText(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
 
 function getPasswordResetRedirect() {
   return `${window.location.origin}/set-password.html`;
@@ -188,7 +199,9 @@ async function openStudentDashboardFromSession() {
   if (TEACHER_PORTAL_ROLES.has(role)) {
     currentStudent = null;
     currentSupabaseUserId = "";
+    currentSupabaseUser = null;
     await window.supabaseClient.auth.signOut();
+    closeStudentSetupModal();
     document.getElementById("student-dashboard").hidden = true;
     document.getElementById("student-login-card").hidden = false;
     document.getElementById("student-password").value = "";
@@ -199,13 +212,16 @@ async function openStudentDashboardFromSession() {
 
   const profile = await loadSupabaseProfile(user);
   currentSupabaseUserId = user.id;
+  currentSupabaseUser = user;
   const student = window.HWFData.ensureStudentFromProfile(profile);
   const hydratedStudent = await hydrateStudentFromServer(student);
 
   document.getElementById("student-error").hidden = true;
   document.getElementById("student-login-card").hidden = true;
   document.getElementById("student-dashboard").hidden = false;
+  activeStudentPortalSection = "book";
   renderStudentDashboard(hydratedStudent);
+  maybeOpenStudentSetupModal(hydratedStudent);
   handleStripeCheckoutReturn();
 }
 
@@ -439,6 +455,220 @@ function setStudentLoginFeedback(message, type) {
   feedback.textContent = message;
   feedback.className = `booking-feedback ${type}`;
   feedback.hidden = false;
+}
+
+function parseBooleanLike(value) {
+  if (value === true) {
+    return true;
+  }
+
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function isStudentSetupComplete(user, student) {
+  const metadata = user?.user_metadata || {};
+  if (parseBooleanLike(metadata.profile_completed)) {
+    return true;
+  }
+
+  const hasMetadataCore =
+    hasText(metadata.full_name || metadata.name) &&
+    hasText(metadata.track) &&
+    hasText(metadata.goal) &&
+    hasText(metadata.timezone);
+  if (hasMetadataCore) {
+    return true;
+  }
+
+  const profileLooksComplete =
+    hasText(student?.name) &&
+    hasText(student?.track) &&
+    hasText(student?.goal) &&
+    hasText(student?.timezone) &&
+    String(student?.timezone || "").trim().toLowerCase() !== "other";
+  return profileLooksComplete;
+}
+
+function setSelectValue(select, value) {
+  if (!select) {
+    return;
+  }
+
+  const nextValue = String(value || "").trim();
+  if (!nextValue) {
+    select.value = "";
+    return;
+  }
+
+  const hasOption = [...select.options].some((option) => option.value === nextValue);
+  if (!hasOption) {
+    const option = document.createElement("option");
+    option.value = nextValue;
+    option.textContent = nextValue;
+    select.appendChild(option);
+  }
+
+  select.value = nextValue;
+}
+
+function setStudentPortalSection(section) {
+  const normalized = String(section || "").trim().toLowerCase();
+  const allowed = new Set(["book", "progress", "community"]);
+  const nextSection = allowed.has(normalized) ? normalized : "book";
+  activeStudentPortalSection = nextSection;
+
+  document.querySelectorAll("[data-student-section]").forEach((button) => {
+    const isActive = String(button.getAttribute("data-student-section")) === nextSection;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+
+  document.querySelectorAll(".student-portal-section").forEach((sectionNode) => {
+    const sectionId = String(sectionNode.id || "");
+    const isActive = sectionId === `student-section-${nextSection}`;
+    sectionNode.hidden = !isActive;
+    sectionNode.classList.toggle("active", isActive);
+  });
+}
+
+function bindStudentSectionNav() {
+  if (studentSectionNavBound) {
+    return;
+  }
+
+  const nav = document.getElementById("student-portal-nav");
+  if (!nav) {
+    return;
+  }
+
+  nav.querySelectorAll("[data-student-section]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setStudentPortalSection(button.getAttribute("data-student-section"));
+    });
+  });
+
+  const quickBookLink = document.getElementById("student-book-link");
+  if (quickBookLink) {
+    quickBookLink.addEventListener("click", () => {
+      setStudentPortalSection("book");
+    });
+  }
+
+  studentSectionNavBound = true;
+}
+
+function setStudentSetupFeedback(message, type) {
+  const feedback = document.getElementById("student-setup-feedback");
+  if (!feedback) {
+    return;
+  }
+
+  feedback.textContent = message;
+  feedback.className = `booking-feedback ${type}`;
+  feedback.hidden = false;
+}
+
+function openStudentSetupModal(student) {
+  const modal = document.getElementById("student-setup-modal");
+  const nameInput = document.getElementById("student-setup-name");
+  const timezoneSelect = document.getElementById("student-setup-timezone");
+  const trackInput = document.getElementById("student-setup-track");
+  const goalSelect = document.getElementById("student-setup-goal");
+  const feedback = document.getElementById("student-setup-feedback");
+
+  if (!modal || !nameInput || !timezoneSelect || !trackInput || !goalSelect || !feedback) {
+    return;
+  }
+
+  const metadata = currentSupabaseUser?.user_metadata || {};
+  const fallbackTimezone = (() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
+    } catch {
+      return "Europe/London";
+    }
+  })();
+
+  const seededName =
+    String(student?.name || metadata.full_name || metadata.name || currentSupabaseUser?.email?.split("@")[0] || "").trim();
+  const seededTimezone = String(student?.timezone || metadata.timezone || fallbackTimezone).trim();
+  const seededTrack = String(student?.track || metadata.track || "1-on-1").trim();
+  const seededGoal = String(student?.goal || metadata.goal || "Free trial lesson").trim();
+
+  nameInput.value = seededName;
+  trackInput.value = seededTrack;
+  setSelectValue(timezoneSelect, seededTimezone);
+  setSelectValue(goalSelect, seededGoal);
+  feedback.hidden = true;
+  modal.hidden = false;
+}
+
+function closeStudentSetupModal() {
+  const modal = document.getElementById("student-setup-modal");
+  if (modal) {
+    modal.hidden = true;
+  }
+}
+
+function maybeOpenStudentSetupModal(student) {
+  if (!currentSupabaseUser) {
+    return;
+  }
+
+  if (isStudentSetupComplete(currentSupabaseUser, student)) {
+    closeStudentSetupModal();
+    return;
+  }
+
+  openStudentSetupModal(student);
+}
+
+function setStudentProfileFeedback(message, type) {
+  const feedback = document.getElementById("student-profile-feedback");
+  if (!feedback) {
+    return;
+  }
+
+  feedback.textContent = message;
+  feedback.className = `booking-feedback ${type}`;
+  feedback.hidden = false;
+}
+
+function updateStudentProfileAvatarPreview() {
+  const input = document.getElementById("student-profile-avatar-url");
+  const preview = document.getElementById("student-profile-avatar-preview");
+  if (!input || !preview) {
+    return;
+  }
+
+  const avatarUrl = String(input.value || "").trim();
+  preview.src = avatarUrl || DEFAULT_PROFILE_AVATAR;
+}
+
+function renderStudentProfileEditor(student) {
+  const nameInput = document.getElementById("student-profile-name-input");
+  const timezoneInput = document.getElementById("student-profile-timezone-input");
+  const trackInput = document.getElementById("student-profile-track-input");
+  const goalInput = document.getElementById("student-profile-goal-input");
+  const notesInput = document.getElementById("student-profile-notes-input");
+  const avatarInput = document.getElementById("student-profile-avatar-url");
+  const preview = document.getElementById("student-profile-avatar-preview");
+
+  if (!nameInput || !timezoneInput || !trackInput || !goalInput || !notesInput || !avatarInput || !preview) {
+    return;
+  }
+
+  const metadata = currentSupabaseUser?.user_metadata || {};
+  const avatarUrl = String(metadata.avatar_url || "").trim();
+
+  nameInput.value = student.name || "";
+  timezoneInput.value = student.timezone || "";
+  trackInput.value = student.track || "";
+  goalInput.value = student.goal || "";
+  notesInput.value = student.notes || student.coachNote || "";
+  avatarInput.value = avatarUrl;
+  preview.src = avatarUrl || DEFAULT_PROFILE_AVATAR;
 }
 
 function getFunctionsBaseUrl() {
@@ -827,8 +1057,209 @@ function renderStudentDashboard(student) {
     })
     .join("");
 
+  renderStudentProfileEditor(student);
   renderStudentBookingSection();
   populateStudentReviewForm(student);
+  setStudentPortalSection(activeStudentPortalSection);
+}
+
+function bindStudentProfileEditor() {
+  if (studentProfileEditorBound) {
+    return;
+  }
+
+  const saveButton = document.getElementById("student-profile-save");
+  const avatarInput = document.getElementById("student-profile-avatar-url");
+  if (!saveButton || !avatarInput) {
+    return;
+  }
+
+  avatarInput.addEventListener("input", updateStudentProfileAvatarPreview);
+
+  saveButton.addEventListener("click", async () => {
+    if (!currentSupabaseUserId || !currentStudent) {
+      setStudentProfileFeedback("Sign in first to update your profile.", "error");
+      return;
+    }
+
+    const fullName = document.getElementById("student-profile-name-input").value.trim();
+    const timezone = document.getElementById("student-profile-timezone-input").value.trim();
+    const track = document.getElementById("student-profile-track-input").value.trim();
+    const goal = document.getElementById("student-profile-goal-input").value.trim();
+    const notes = document.getElementById("student-profile-notes-input").value.trim();
+    const avatarUrl = document.getElementById("student-profile-avatar-url").value.trim();
+
+    if (!fullName) {
+      setStudentProfileFeedback("Full name is required.", "error");
+      return;
+    }
+
+    saveButton.disabled = true;
+    try {
+      const { error: profileError } = await window.supabaseClient
+        .from("profiles")
+        .update({
+          full_name: fullName,
+          timezone: timezone || "other",
+          track: track || "1-on-1",
+          goal: goal || "Conversation",
+          notes
+        })
+        .eq("id", currentSupabaseUserId);
+
+      if (profileError) {
+        setStudentProfileFeedback(profileError.message || "Could not save profile details.", "error");
+        return;
+      }
+
+      const metadataPayload = {
+        full_name: fullName,
+        timezone: timezone || "other",
+        track: track || "1-on-1",
+        goal: goal || "Conversation",
+        notes,
+        avatar_url: avatarUrl || ""
+      };
+
+      const { error: authError } = await window.supabaseClient.auth.updateUser({
+        data: metadataPayload
+      });
+
+      if (!authError && currentSupabaseUser) {
+        currentSupabaseUser = {
+          ...currentSupabaseUser,
+          user_metadata: {
+            ...(currentSupabaseUser.user_metadata || {}),
+            ...metadataPayload
+          }
+        };
+      }
+
+      const updatedStudent = window.HWFData.ensureStudentFromProfile({
+        id: currentSupabaseUserId,
+        email: currentStudent.email,
+        full_name: fullName,
+        name: fullName,
+        level: currentStudent.level || "Beginner",
+        track: track || "1-on-1",
+        timezone: timezone || "other",
+        goal: goal || "Conversation",
+        notes
+      });
+
+      const hydratedStudent = await hydrateStudentFromServer({
+        ...currentStudent,
+        ...updatedStudent,
+        name: fullName,
+        track: track || "1-on-1",
+        timezone: timezone || "other",
+        goal: goal || "Conversation",
+        notes
+      });
+      renderStudentDashboard(hydratedStudent);
+
+      if (authError) {
+        setStudentProfileFeedback(
+          `Profile saved, but auth metadata update failed: ${authError.message || "Unknown error"}`,
+          "error"
+        );
+        return;
+      }
+
+      setStudentProfileFeedback("Profile updated.", "success");
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+
+  studentProfileEditorBound = true;
+}
+
+function bindStudentSetupModal() {
+  if (studentSetupModalBound) {
+    return;
+  }
+
+  const saveButton = document.getElementById("student-setup-save");
+  if (!saveButton) {
+    return;
+  }
+
+  saveButton.addEventListener("click", async () => {
+    if (!currentSupabaseUserId || !currentStudent || !currentSupabaseUser) {
+      setStudentSetupFeedback("Sign in again to complete setup.", "error");
+      return;
+    }
+
+    const fullName = String(document.getElementById("student-setup-name")?.value || "").trim();
+    const timezone = String(document.getElementById("student-setup-timezone")?.value || "").trim();
+    const track = String(document.getElementById("student-setup-track")?.value || "").trim();
+    const goal = String(document.getElementById("student-setup-goal")?.value || "").trim();
+
+    if (!fullName || !timezone || !track || !goal) {
+      setStudentSetupFeedback("Please complete all fields.", "error");
+      return;
+    }
+
+    saveButton.disabled = true;
+    try {
+      const { error: profileError } = await window.supabaseClient
+        .from("profiles")
+        .update({
+          full_name: fullName,
+          timezone,
+          track,
+          goal
+        })
+        .eq("id", currentSupabaseUserId);
+
+      if (profileError) {
+        setStudentSetupFeedback(profileError.message || "Could not save setup.", "error");
+        return;
+      }
+
+      const metadataPayload = {
+        full_name: fullName,
+        timezone,
+        track,
+        goal,
+        profile_completed: true,
+        profile_completed_at: new Date().toISOString()
+      };
+
+      const { error: authError } = await window.supabaseClient.auth.updateUser({
+        data: metadataPayload
+      });
+
+      if (authError) {
+        setStudentSetupFeedback(authError.message || "Could not finish setup.", "error");
+        return;
+      }
+
+      currentSupabaseUser = {
+        ...currentSupabaseUser,
+        user_metadata: {
+          ...(currentSupabaseUser.user_metadata || {}),
+          ...metadataPayload
+        }
+      };
+
+      const refreshedStudent = await hydrateStudentFromServer({
+        ...currentStudent,
+        name: fullName,
+        timezone,
+        track,
+        goal
+      });
+      renderStudentDashboard(refreshedStudent);
+      closeStudentSetupModal();
+      setStudentBookingFeedback("Profile setup saved. You can edit details later in My Profile.", "success");
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+
+  studentSetupModalBound = true;
 }
 
 function bindStudentBookingSection() {
@@ -871,19 +1302,6 @@ function bindStudentBookingSection() {
       window.HWFData.removeAvailabilitySlot(matchingSlot.id);
     }
 
-    try {
-      await window.HWFEmailApi.sendBookingEmail({
-        studentName: bookingPayload.studentName,
-        email: bookingPayload.email,
-        date: bookingPayload.date,
-        time: bookingPayload.time,
-        lessonType: bookingPayload.lessonType,
-        message: bookingPayload.message
-      });
-    } catch {
-      // Keep the booking if the email fails.
-    }
-
     document.getElementById("student-booking-message").value = "";
     const refreshedStudent = await hydrateStudentFromServer(currentStudent);
     renderStudentDashboard(refreshedStudent);
@@ -891,12 +1309,44 @@ function bindStudentBookingSection() {
       return String(lesson.id) === String(serverResult.booking.id);
     });
 
-    setStudentBookingFeedback(
+    let emailErrorMessage = "";
+
+    if (bookedLesson) {
+      try {
+        if (bookedLesson.isFreeFirstLesson) {
+          await window.HWFEmailApi.sendBookingEmail({
+            studentName: bookingPayload.studentName,
+            email: bookingPayload.email,
+            date: bookingPayload.date,
+            time: bookingPayload.time,
+            lessonType: bookingPayload.lessonType,
+            message: bookingPayload.message
+          });
+        } else {
+          await window.HWFEmailApi.sendPaymentPendingEmail({
+            studentName: bookingPayload.studentName,
+            email: bookingPayload.email,
+            date: bookingPayload.date,
+            time: bookingPayload.time,
+            lessonType: bookingPayload.lessonType
+          });
+        }
+      } catch (emailError) {
+        emailErrorMessage = String(emailError?.message || "").trim() || "Unknown email error.";
+      }
+    }
+
+    const baseMessage =
       bookedLesson && bookedLesson.isFreeFirstLesson
         ? `Congratulations. Your free first lesson is booked for ${formatStudentDate(serverResult.booking.lesson_date, serverResult.booking.lesson_time)} at ${serverResult.booking.lesson_time.slice(0, 5)}.`
-        : `Booked for ${formatStudentDate(serverResult.booking.lesson_date, serverResult.booking.lesson_time)} at ${serverResult.booking.lesson_time.slice(0, 5)}. Use Pay Now in your upcoming lessons to open Stripe checkout.`,
-      "success"
-    );
+        : `Reserved for ${formatStudentDate(serverResult.booking.lesson_date, serverResult.booking.lesson_time)} at ${serverResult.booking.lesson_time.slice(0, 5)}. Please complete payment from your upcoming lessons (Pay Now).`;
+
+    if (emailErrorMessage) {
+      setStudentBookingFeedback(`${baseMessage} Booking saved, but email failed: ${emailErrorMessage}`, "error");
+      return;
+    }
+
+    setStudentBookingFeedback(baseMessage, "success");
   });
 }
 
@@ -1022,10 +1472,13 @@ function bindStudentLogin() {
   document.getElementById("student-logout").addEventListener("click", async () => {
     currentStudent = null;
     currentSupabaseUserId = "";
+    currentSupabaseUser = null;
+    activeStudentPortalSection = "book";
     selectedStudentRating = 0;
     selectedStudentBookingDate = "";
     selectedStudentBookingTime = "";
     await window.supabaseClient.auth.signOut();
+    closeStudentSetupModal();
     document.getElementById("student-login-card").hidden = false;
     document.getElementById("student-dashboard").hidden = true;
     document.getElementById("student-email").value = "";
@@ -1040,7 +1493,10 @@ function bindStudentLogin() {
 
 function initStudentPortal() {
   window.HWFData.ensurePortalState();
+  bindStudentSectionNav();
   bindStudentLogin();
+  bindStudentProfileEditor();
+  bindStudentSetupModal();
   bindStudentBookingSection();
   bindStudentReviewForm();
   openStudentDashboardFromSession();
