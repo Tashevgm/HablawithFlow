@@ -14,6 +14,7 @@ const resendApiKey = process.env.RESEND_API_KEY;
 const emailFrom = process.env.EMAIL_FROM || "Hablawithflow <onboarding@resend.dev>";
 const ownerEmail = process.env.OWNER_EMAIL || "";
 const bookingTeacherEmails = process.env.BOOKING_TEACHER_EMAILS || "";
+const emailOverrideTo = process.env.EMAIL_OVERRIDE_TO || "";
 const teacherInviteToken = process.env.TEACHER_INVITE_TOKEN || "";
 const publicSiteUrl = process.env.PUBLIC_SITE_URL || "https://hablawithflow.com";
 const googleMeetLink = process.env.GOOGLE_MEET_LINK || "";
@@ -100,7 +101,17 @@ async function sendEmailWithResend(payload, label) {
     throw new Error("Resend is not configured. Add RESEND_API_KEY to the server environment.");
   }
 
-  const result = await resend.emails.send(payload);
+  const outboundPayload =
+    required(emailOverrideTo) && payload && typeof payload === "object"
+      ? {
+          ...payload,
+          to: emailOverrideTo.trim().toLowerCase(),
+          cc: undefined,
+          bcc: undefined
+        }
+      : payload;
+
+  const result = await resend.emails.send(outboundPayload);
   if (result?.error) {
     const resendMessage = String(result.error.message || "Unknown Resend error.").trim();
     const context = required(label) ? `${label}: ` : "";
@@ -1082,6 +1093,7 @@ app.get("/api/health", (request, response) => {
       provider: "resend",
       configured: Boolean(resendApiKey),
       from: emailFrom,
+      overrideTo: required(emailOverrideTo) ? emailOverrideTo.trim().toLowerCase() : "",
       ownerConfigured: required(ownerEmail),
       teacherNotificationRecipients: listBookingNotificationRecipients().length
     },
@@ -1312,9 +1324,12 @@ app.post("/api/booking/confirm-email-complete", async (request, response) => {
 
 app.get("/api/teacher/students", async (request, response) => {
   try {
-    if (!(await requireTeacherAccess(request, response))) {
+    const teacherUser = await requireTeacherAccess(request, response);
+    if (!teacherUser) {
       return;
     }
+    const teacherUserId = String(teacherUser.id || "").trim();
+    const teacherEmail = String(teacherUser.email || "").trim().toLowerCase();
 
     const [{ data: profileRows, error: profileError }, authUsers] = await Promise.all([
       supabaseAdmin.from("profiles").select("id, role, full_name, level, track, goal, notes"),
@@ -1332,6 +1347,10 @@ app.get("/api/teacher/students", async (request, response) => {
         const authUser = authUserById.get(profile.id);
         const email = (authUser?.email || "").trim().toLowerCase();
         if (!required(email)) {
+          return null;
+        }
+
+        if ((required(teacherUserId) && String(profile.id || "").trim() === teacherUserId) || (required(teacherEmail) && email === teacherEmail)) {
           return null;
         }
 
