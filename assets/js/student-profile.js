@@ -87,50 +87,89 @@ async function requireTeacherSession() {
   return user;
 }
 
-function resolveStudentFromQuery() {
+async function fetchTeacherStudentsFromServer() {
+  const {
+    data: { session }
+  } = await window.supabaseClient.auth.getSession();
+  const accessToken = session?.access_token || "";
+  if (!accessToken) {
+    return null;
+  }
+
+  const configuredApiBase =
+    window.HWF_APP_CONFIG && typeof window.HWF_APP_CONFIG.apiBase === "string"
+      ? window.HWF_APP_CONFIG.apiBase.trim()
+      : "";
+  const apiBase = configuredApiBase || window.location.origin;
+
+  try {
+    const response = await fetch(`${apiBase}/api/teacher/students`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json();
+    if (!payload || payload.ok !== true || !Array.isArray(payload.students)) {
+      return null;
+    }
+
+    return payload.students;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveStudentFromQuery() {
   const params = new URLSearchParams(window.location.search);
   const studentId = params.get("id") || "";
   const studentEmail = normalizeEmail(params.get("email") || "");
 
-  if (window.HWFData) {
-    window.HWFData.ensurePortalState();
-  }
-
-  let student = null;
-
-  if (studentId && window.HWFData && typeof window.HWFData.getStudentById === "function") {
-    student = window.HWFData.getStudentById(studentId);
-  }
-
-  if (!student && studentEmail && window.HWFData && typeof window.HWFData.listStudents === "function") {
-    student = window.HWFData.listStudents().find((entry) => normalizeEmail(entry.email) === studentEmail) || null;
-  }
-
-  if (!student && !studentEmail) {
+  if (!studentId && !studentEmail) {
     return null;
   }
 
-  if (!student) {
-    student = {
-      id: studentId || studentEmail,
-      name: studentEmail.split("@")[0] || "Student",
-      email: studentEmail,
-      track: "Not set",
-      level: "Not set",
-      completedLessons: 0,
-      totalLessons: 0,
-      streak: 0,
-      coachNote: "",
-      nextMilestone: "",
-      focusAreas: [],
-      upcomingLessons: [],
-      lessonHistory: []
-    };
+  const students = await fetchTeacherStudentsFromServer();
+  if (!Array.isArray(students)) {
+    return null;
   }
 
-  studentProfileState.student = student;
-  studentProfileState.studentEmail = normalizeEmail(student.email || studentEmail);
-  return student;
+  let student =
+    students.find((entry) => {
+      return studentId && String(entry.id || "").trim() === String(studentId).trim();
+    }) || null;
+
+  if (!student && studentEmail) {
+    student = students.find((entry) => normalizeEmail(entry.email) === studentEmail) || null;
+  }
+
+  if (!student) {
+    return null;
+  }
+
+  const normalizedGoal = String(student.goal || "Conversation").trim() || "Conversation";
+  const normalizedStudent = {
+    id: String(student.id || "").trim(),
+    name: String(student.name || student.full_name || studentEmail.split("@")[0] || "Student").trim(),
+    email: normalizeEmail(student.email || studentEmail),
+    track: String(student.track || "Not set").trim(),
+    level: String(student.level || "Not set").trim(),
+    completedLessons: 0,
+    totalLessons: 0,
+    streak: 0,
+    coachNote: String(student.notes || "").trim(),
+    nextMilestone: "",
+    focusAreas: [normalizedGoal],
+    upcomingLessons: [],
+    lessonHistory: []
+  };
+
+  studentProfileState.student = normalizedStudent;
+  studentProfileState.studentEmail = normalizeEmail(normalizedStudent.email || studentEmail);
+  return normalizedStudent;
 }
 
 async function loadStudentProfileData() {
@@ -501,7 +540,7 @@ async function initStudentProfilePage() {
     return;
   }
 
-  const student = resolveStudentFromQuery();
+  const student = await resolveStudentFromQuery();
   if (!student || !studentProfileState.studentEmail) {
     window.location.href = "teacher-students.html";
     return;

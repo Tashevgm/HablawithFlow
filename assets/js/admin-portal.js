@@ -21,6 +21,7 @@ let teacherBookingsRefreshTickerId = 0;
 let teacherMeetingConfigured = false;
 let teacherMeetingDynamicPerBooking = false;
 let teacherBookingsLoadError = "";
+let teacherServerStudents = [];
 const DEFAULT_PROFILE_AVATAR =
   "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80";
 window.HWFServerBookings = window.HWFServerBookings || [];
@@ -252,8 +253,73 @@ function getBookings() {
   return window.HWFData.listBookings();
 }
 
+function normalizeTeacherStudentRecord(student) {
+  const normalizedGoal = String(student?.goal || "Conversation").trim() || "Conversation";
+  const normalizedName = String(student?.name || student?.full_name || "").trim();
+  const normalizedEmail = normalizeEmail(student?.email || "");
+
+  return {
+    id: String(student?.id || "").trim(),
+    email: normalizedEmail,
+    name: normalizedName || (normalizedEmail ? normalizedEmail.split("@")[0] : "Student"),
+    full_name: normalizedName || (normalizedEmail ? normalizedEmail.split("@")[0] : "Student"),
+    level: String(student?.level || "Beginner").trim() || "Beginner",
+    track: String(student?.track || "1-on-1").trim() || "1-on-1",
+    goal: normalizedGoal,
+    notes: String(student?.notes || "").trim(),
+    completedLessons: Number(student?.completedLessons || student?.completed_lessons || 0) || 0,
+    totalLessons: Number(student?.totalLessons || student?.total_lessons || 0) || 0,
+    streak: Number(student?.streak || 0) || 0,
+    nextMilestone: String(student?.nextMilestone || student?.next_milestone || "").trim(),
+    focusAreas: Array.isArray(student?.focusAreas)
+      ? student.focusAreas.filter((value) => hasText(String(value || "")))
+      : [normalizedGoal],
+    coachNote: String(student?.coachNote || student?.coach_note || student?.notes || "").trim(),
+    upcomingLessons: [],
+    lessonHistory: []
+  };
+}
+
+function getServerStudentsWithUpcomingLessons() {
+  const students = Array.isArray(teacherServerStudents) ? teacherServerStudents : [];
+  const activeBookings = getBookings().filter((booking) => getBookingStatusMeta(booking.status).active);
+
+  return students
+    .map((student) => {
+      const studentBookings = activeBookings
+        .filter((booking) => {
+          const bookingStudentId = String(booking.student_id || booking.studentId || "").trim();
+          const bookingEmail = normalizeEmail(booking.email || booking.student_email || "");
+          return (
+            (student.id && bookingStudentId && student.id === bookingStudentId) ||
+            (student.email && bookingEmail && student.email === bookingEmail)
+          );
+        })
+        .map((booking) => ({
+          id: booking.id,
+          date: booking.date,
+          time: booking.time,
+          topic: booking.lessonType || student.track,
+          status: getBookingStatusMeta(booking.status).label || "Booked"
+        }))
+        .sort((left, right) => `${left.date}T${left.time}`.localeCompare(`${right.date}T${right.time}`));
+
+      return {
+        ...student,
+        upcomingLessons: studentBookings
+      };
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 function getStudents() {
-  return window.HWFData.listStudents();
+  return getServerStudentsWithUpcomingLessons();
+}
+
+function clearLocalStudentCache() {
+  if (window.HWFData && typeof window.HWFData.pruneStudentsByEmails === "function") {
+    window.HWFData.pruneStudentsByEmails([]);
+  }
 }
 
 function getStudentGroups() {
@@ -811,36 +877,13 @@ async function fetchTeacherMeetingJoinLinkForBooking(bookingId) {
 }
 
 async function syncStudentsFromServerProfiles() {
-  if (
-    !window.HWFData ||
-    typeof window.HWFData.ensureStudentFromProfile !== "function" ||
-    typeof window.HWFData.pruneStudentsByEmails !== "function"
-  ) {
-    return false;
-  }
-
   const serverStudents = await fetchTeacherStudentsFromServer();
   if (!Array.isArray(serverStudents)) {
+    teacherServerStudents = [];
     return false;
   }
 
-  const activeEmails = [];
-  serverStudents.forEach((student) => {
-    const email = normalizeEmail(student.email);
-    if (!email) {
-      return;
-    }
-
-    window.HWFData.ensureStudentFromProfile({
-      ...student,
-      name: student.name || student.full_name || email.split("@")[0],
-      full_name: student.full_name || student.name || email.split("@")[0],
-      email
-    });
-    activeEmails.push(email);
-  });
-
-  window.HWFData.pruneStudentsByEmails(activeEmails);
+  teacherServerStudents = serverStudents.map(normalizeTeacherStudentRecord);
   return true;
 }
 
@@ -908,14 +951,18 @@ async function showTeacherDashboard() {
   }
 
   const bookingsLoaded = await loadServerBookings();
+  const studentsLoaded = await syncStudentsFromServerProfiles();
+
   if (!bookingsLoaded) {
     setDashboardActionError(
       teacherBookingsLoadError || "Could not load latest bookings from server. Please refresh."
     );
+  } else if (!studentsLoaded) {
+    setDashboardActionError("Could not load student roster from Supabase. Refresh and check your teacher permissions.");
   } else {
     clearDashboardActionError();
   }
-  await syncStudentsFromServerProfiles();
+
   renderAdminDashboard();
   startTeacherLiveSync();
 }
@@ -1522,7 +1569,7 @@ function loadStudentIntoForm(studentId) {
     return;
   }
 
-  const student = window.HWFData.getStudentById(studentId);
+  const student = getStudents().find((entry) => entry.id === String(studentId || "").trim()) || null;
   if (!student) {
     return;
   }
@@ -2174,29 +2221,68 @@ function bindStudentEditor() {
     loadStudentIntoForm(event.target.value);
   });
 
-  byId("save-student").addEventListener("click", () => {
-    const result = window.HWFData.updateStudentProgress(byId("student-select").value, {
-      track: byId("student-track").value.trim(),
-      level: byId("student-level").value.trim(),
-      completedLessons: byId("student-completed").value,
-      totalLessons: byId("student-total").value,
-      streak: byId("student-streak").value,
-      nextMilestone: byId("student-milestone").value.trim(),
-      focusAreas: byId("student-focus").value,
-      coachNote: byId("student-note").value.trim()
-    });
-
+  byId("save-student").addEventListener("click", async () => {
+    const selectedStudentId = String(byId("student-select").value || "").trim();
+    const track = byId("student-track").value.trim();
+    const level = byId("student-level").value.trim();
+    const completedLessons = Number(byId("student-completed").value || 0) || 0;
+    const totalLessons = Number(byId("student-total").value || 0) || 0;
+    const streak = Number(byId("student-streak").value || 0) || 0;
+    const nextMilestone = byId("student-milestone").value.trim();
+    const focusAreasRaw = byId("student-focus").value;
+    const coachNote = byId("student-note").value.trim();
+    const parsedFocusAreas = String(focusAreasRaw || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const goal = parsedFocusAreas.length ? parsedFocusAreas[0] : "Conversation";
     const message = byId("student-save-message");
     message.hidden = false;
 
-    if (!result.ok) {
+    if (!selectedStudentId) {
       message.className = "booking-feedback error";
-      message.textContent = result.error;
+      message.textContent = "Select a student first.";
       return;
     }
 
+    const { error: profileError } = await window.supabaseClient
+      .from("profiles")
+      .update({
+        track: track || "1-on-1",
+        level: level || "Beginner",
+        goal,
+        notes: coachNote
+      })
+      .eq("id", selectedStudentId);
+
+    if (profileError) {
+      message.className = "booking-feedback error";
+      message.textContent = profileError.message || "Could not save student profile to Supabase.";
+      return;
+    }
+
+    teacherServerStudents = teacherServerStudents.map((student) => {
+      if (student.id !== selectedStudentId) {
+        return student;
+      }
+
+      return {
+        ...student,
+        track: track || student.track || "1-on-1",
+        level: level || student.level || "Beginner",
+        goal,
+        notes: coachNote,
+        completedLessons,
+        totalLessons,
+        streak,
+        nextMilestone,
+        focusAreas: parsedFocusAreas.length ? parsedFocusAreas : [goal],
+        coachNote
+      };
+    });
+
     message.className = "booking-feedback success";
-    message.textContent = "Student progress saved.";
+    message.textContent = "Student data saved to Supabase.";
     renderAdminDashboard();
   });
 }
@@ -2228,6 +2314,7 @@ function bindTeacherLogout() {
 
 async function initAdminPortal() {
   window.HWFData.ensurePortalState();
+  clearLocalStudentCache();
   startTeacherMeetingTicker();
   bindTeacherProfileEditor();
   bindTeacherAuth();
