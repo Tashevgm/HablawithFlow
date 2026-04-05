@@ -283,32 +283,96 @@ function normalizeTeacherStudentRecord(student) {
 function getServerStudentsWithUpcomingLessons() {
   const students = Array.isArray(teacherServerStudents) ? teacherServerStudents : [];
   const activeBookings = getBookings().filter((booking) => getBookingStatusMeta(booking.status).active);
+  const studentsByPrimaryKey = new Map();
+  const studentPrimaryByLookupKey = new Map();
 
-  return students
-    .map((student) => {
-      const studentBookings = activeBookings
-        .filter((booking) => {
-          const bookingStudentId = String(booking.student_id || booking.studentId || "").trim();
-          const bookingEmail = normalizeEmail(booking.email || booking.student_email || "");
-          return (
-            (student.id && bookingStudentId && student.id === bookingStudentId) ||
-            (student.email && bookingEmail && student.email === bookingEmail)
-          );
-        })
-        .map((booking) => ({
-          id: booking.id,
-          date: booking.date,
-          time: booking.time,
-          topic: booking.lessonType || student.track,
-          status: getBookingStatusMeta(booking.status).label || "Booked"
-        }))
-        .sort((left, right) => `${left.date}T${left.time}`.localeCompare(`${right.date}T${right.time}`));
+  students.forEach((student) => {
+    const normalized = normalizeTeacherStudentRecord(student);
+    const normalizedId = String(normalized.id || "").trim();
+    const normalizedEmail = normalizeEmail(normalized.email || "");
+    const primaryKey = normalizedId ? `id:${normalizedId}` : normalizedEmail ? `email:${normalizedEmail}` : "";
+    if (!primaryKey) {
+      return;
+    }
 
-      return {
-        ...student,
-        upcomingLessons: studentBookings
-      };
-    })
+    studentsByPrimaryKey.set(primaryKey, {
+      ...normalized,
+      upcomingLessons: []
+    });
+
+    if (normalizedId) {
+      studentPrimaryByLookupKey.set(`id:${normalizedId}`, primaryKey);
+    }
+    if (normalizedEmail) {
+      studentPrimaryByLookupKey.set(`email:${normalizedEmail}`, primaryKey);
+    }
+  });
+
+  activeBookings.forEach((booking) => {
+    const bookingStudentId = String(booking.student_id || booking.studentId || "").trim();
+    const bookingEmail = normalizeEmail(booking.email || booking.student_email || "");
+    const idLookupKey = bookingStudentId ? `id:${bookingStudentId}` : "";
+    const emailLookupKey = bookingEmail ? `email:${bookingEmail}` : "";
+    let primaryKey =
+      (idLookupKey && studentPrimaryByLookupKey.get(idLookupKey)) ||
+      (emailLookupKey && studentPrimaryByLookupKey.get(emailLookupKey)) ||
+      "";
+
+    if (!primaryKey) {
+      const fallbackName = hasText(booking.student_name)
+        ? String(booking.student_name).trim()
+        : bookingEmail
+          ? bookingEmail.split("@")[0]
+          : "Student";
+      const fallbackStudent = normalizeTeacherStudentRecord({
+        id: bookingStudentId || bookingEmail,
+        email: bookingEmail,
+        name: fallbackName,
+        full_name: fallbackName,
+        track: booking.lessonType || booking.lesson_type || "1-on-1",
+        goal: "Conversation"
+      });
+      const fallbackId = String(fallbackStudent.id || "").trim();
+      const fallbackEmail = normalizeEmail(fallbackStudent.email || "");
+      primaryKey = fallbackId ? `id:${fallbackId}` : fallbackEmail ? `email:${fallbackEmail}` : "";
+
+      if (!primaryKey) {
+        return;
+      }
+
+      studentsByPrimaryKey.set(primaryKey, {
+        ...fallbackStudent,
+        upcomingLessons: []
+      });
+      if (fallbackId) {
+        studentPrimaryByLookupKey.set(`id:${fallbackId}`, primaryKey);
+      }
+      if (fallbackEmail) {
+        studentPrimaryByLookupKey.set(`email:${fallbackEmail}`, primaryKey);
+      }
+    }
+
+    const student = studentsByPrimaryKey.get(primaryKey);
+    if (!student) {
+      return;
+    }
+
+    student.upcomingLessons.push({
+      id: booking.id,
+      date: booking.date,
+      time: booking.time,
+      topic: booking.lessonType || booking.lesson_type || student.track,
+      status: getBookingStatusMeta(booking.status).label || "Booked"
+    });
+  });
+
+  return Array.from(studentsByPrimaryKey.values())
+    .map((student) => ({
+      ...student,
+      upcomingLessons: Array.isArray(student.upcomingLessons)
+        ? student.upcomingLessons.sort((left, right) => `${left.date}T${left.time}`.localeCompare(`${right.date}T${right.time}`))
+        : []
+    }))
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 

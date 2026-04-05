@@ -1533,7 +1533,7 @@ textarea {
 }
 
 .booking-day-cell {
-  min-height: 78px;
+  min-height: 84px;
   padding: 10px 8px;
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -1602,6 +1602,7 @@ textarea {
   justify-content: space-between;
   gap: 12px;
   width: 100%;
+  min-height: 56px;
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -1677,6 +1678,124 @@ textarea {
 
 .portal-shell {
   padding: 24px 5% 100px;
+}
+
+.student-portal-shell {
+  padding-top: 36px;
+}
+
+.student-status-wrap {
+  margin-bottom: 18px;
+}
+
+.student-status-bar {
+  position: sticky;
+  top: 10px;
+  z-index: 20;
+  display: grid;
+  gap: 18px;
+  border: 1px solid rgba(26, 188, 156, 0.22);
+  background:
+    radial-gradient(circle at top right, rgba(26, 188, 156, 0.12), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(243, 249, 247, 0.96) 100%);
+}
+
+.student-status-intro h2 {
+  margin: 12px 0 0;
+  font-size: clamp(1.7rem, 2.8vw, 2.4rem);
+}
+
+.student-status-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.student-status-item {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.student-status-item span {
+  display: block;
+  margin-bottom: 4px;
+  color: #6f635b;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.student-status-item strong {
+  font-size: 0.98rem;
+}
+
+.student-status-join-btn {
+  min-width: 170px;
+  min-height: 52px;
+  justify-content: center;
+}
+
+.student-home-actions {
+  display: grid;
+  gap: 16px;
+  margin: 0 0 20px;
+}
+
+.student-section-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.student-section-card {
+  min-height: 94px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.student-section-card strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 1rem;
+}
+
+.student-section-card span {
+  color: #70675f;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.student-section-card:hover,
+.student-section-card:focus-visible {
+  border-color: rgba(192, 57, 43, 0.35);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.student-section-card.active {
+  border-color: var(--red);
+  background: linear-gradient(180deg, rgba(255, 247, 244, 1) 0%, rgba(255, 255, 255, 1) 100%);
+  box-shadow: 0 10px 24px rgba(192, 57, 43, 0.14);
+}
+
+.student-home-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.student-home-links .portal-link {
+  min-width: 150px;
+  text-align: center;
 }
 
 .teacher-page-nav {
@@ -3122,6 +3241,19 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .student-section-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .student-status-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .student-status-join-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
   .teacher-page-nav {
     padding-bottom: 0;
   }
@@ -3270,6 +3402,10 @@ textarea {
     padding: 18px 16px 72px;
   }
 
+  .student-portal-shell {
+    padding-top: 20px;
+  }
+
   .portal-grid,
   .portal-grid-top,
   .portal-grid-wide,
@@ -3338,6 +3474,14 @@ textarea {
   .portal-link {
     width: 100%;
     min-width: 0;
+  }
+
+  .student-section-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .student-section-card {
+    min-height: 86px;
   }
 
   .teacher-page-link {

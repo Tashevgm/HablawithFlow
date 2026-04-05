@@ -25,6 +25,19 @@ function hasText(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function byId(id) {
+  return document.getElementById(id);
+}
+
+function setText(id, value) {
+  const node = byId(id);
+  if (!node) {
+    return;
+  }
+
+  node.textContent = String(value || "");
+}
+
 function normalizeIsoDateValue(value) {
   const raw = String(value || "").trim();
   if (!raw) {
@@ -275,6 +288,46 @@ async function fetchStudentMeetingJoinLinkForBooking(bookingId) {
   } catch {
     return "";
   }
+}
+
+async function openStudentMeetingForBooking({ bookingId, date, time, triggerButton }) {
+  if (!studentMeetingConfigured) {
+    setStudentBookingFeedback("Meeting link is not configured yet.", "error");
+    return false;
+  }
+
+  const state = getMeetingJoinState(date, time);
+  if (!state.enabled) {
+    setStudentBookingFeedback(
+      `Join button unlocks ${studentMeetingEnableMinutesBefore} minutes before the lesson.`,
+      "error"
+    );
+    return false;
+  }
+
+  const button = triggerButton || null;
+  const originalLabel = button ? button.textContent : "";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Opening...";
+  }
+
+  const resolvedMeetingLink = studentMeetingDynamicPerBooking
+    ? await fetchStudentMeetingJoinLinkForBooking(bookingId)
+    : studentMeetingJoinLink;
+
+  if (button) {
+    button.disabled = false;
+    button.textContent = originalLabel || "Join Meeting";
+  }
+
+  if (!hasText(resolvedMeetingLink)) {
+    setStudentBookingFeedback("Could not open meeting link right now. Please try again.", "error");
+    return false;
+  }
+
+  window.open(resolvedMeetingLink, "_blank", "noopener,noreferrer");
+  return true;
 }
 
 function loadStoredReviews() {
@@ -689,7 +742,11 @@ function findStudentReview(student) {
 }
 
 function setStudentReviewFeedback(message, type) {
-  const feedback = document.getElementById("student-review-feedback");
+  const feedback = byId("student-review-feedback");
+  if (!feedback) {
+    return;
+  }
+
   feedback.textContent = message;
   feedback.className = `booking-feedback ${type}`;
   feedback.hidden = false;
@@ -817,7 +874,7 @@ function setSelectValue(select, value) {
 
 function setStudentPortalSection(section) {
   const normalized = String(section || "").trim().toLowerCase();
-  const allowed = new Set(["book", "progress", "community"]);
+  const allowed = new Set(["book", "lessons", "progress", "community"]);
   const nextSection = allowed.has(normalized) ? normalized : "book";
   activeStudentPortalSection = nextSection;
 
@@ -851,10 +908,13 @@ function bindStudentSectionNav() {
     });
   });
 
-  const quickBookLink = document.getElementById("student-book-link");
-  if (quickBookLink) {
-    quickBookLink.addEventListener("click", () => {
-      setStudentPortalSection("book");
+  const statusJoinButton = byId("student-status-join");
+  if (statusJoinButton) {
+    statusJoinButton.addEventListener("click", async () => {
+      const bookingId = String(statusJoinButton.getAttribute("data-booking-id") || "").trim();
+      const date = String(statusJoinButton.getAttribute("data-lesson-date") || "");
+      const time = String(statusJoinButton.getAttribute("data-lesson-time") || "");
+      await openStudentMeetingForBooking({ bookingId, date, time, triggerButton: statusJoinButton });
     });
   }
 
@@ -983,24 +1043,22 @@ function getFunctionsBaseUrl() {
   return `${supabaseBase.replace(/\/+$/, "")}/functions/v1`;
 }
 
-async function createStripeCheckoutSession(bookingId) {
-  const {
-    data: { session }
-  } = await window.supabaseClient.auth.getSession();
+function getApiBaseUrl() {
+  const configuredApiBase =
+    window.HWF_APP_CONFIG && typeof window.HWF_APP_CONFIG.apiBase === "string"
+      ? window.HWF_APP_CONFIG.apiBase.trim()
+      : "";
+  return configuredApiBase || window.location.origin;
+}
 
-  if (!session?.access_token) {
-    throw new Error("Your session expired. Please sign in again.");
-  }
-
-  const response = await fetch(`${getFunctionsBaseUrl()}/create-checkout-session`, {
+async function requestStripeCheckoutSession(url, accessToken, body) {
+  const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`
+      Authorization: `Bearer ${accessToken}`
     },
-    body: JSON.stringify({
-      booking_id: bookingId
-    })
+    body: JSON.stringify(body)
   });
 
   const data = await response.json().catch(() => ({
@@ -1012,45 +1070,91 @@ async function createStripeCheckoutSession(bookingId) {
     throw new Error(data?.error || `Stripe checkout failed with status ${response.status}.`);
   }
 
-  return data.url;
+  return String(data.url);
 }
 
-async function confirmStripeCheckoutSession(sessionId) {
+async function createStripeCheckoutSession(bookingId) {
   const {
     data: { session }
   } = await window.supabaseClient.auth.getSession();
 
   if (!session?.access_token) {
-    throw new Error("Your session expired before payment confirmation. Please sign in again.");
+    throw new Error("Your session expired. Please sign in again.");
   }
 
-  const configuredApiBase =
-    window.HWF_APP_CONFIG && typeof window.HWF_APP_CONFIG.apiBase === "string"
-      ? window.HWF_APP_CONFIG.apiBase.trim()
-      : "";
-  const apiBase = configuredApiBase || window.location.origin;
+  const backendUrl = `${getApiBaseUrl()}/api/booking/stripe/create-session`;
+  try {
+    return await requestStripeCheckoutSession(backendUrl, session.access_token, {
+      bookingId
+    });
+  } catch (backendError) {
+    const edgeUrl = `${getFunctionsBaseUrl()}/create-checkout-session`;
+    try {
+      return await requestStripeCheckoutSession(edgeUrl, session.access_token, {
+        booking_id: bookingId
+      });
+    } catch (edgeError) {
+      const backendMessage = backendError instanceof Error ? backendError.message : "";
+      const edgeMessage = edgeError instanceof Error ? edgeError.message : "";
+      if (hasText(backendMessage) && hasText(edgeMessage) && backendMessage !== edgeMessage) {
+        throw new Error(`${backendMessage} Fallback error: ${edgeMessage}`);
+      }
+      throw new Error(edgeMessage || backendMessage || "Could not open Stripe checkout.");
+    }
+  }
+}
 
-  const response = await fetch(`${apiBase}/api/booking/stripe/confirm-session`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify({
-      sessionId
-    })
-  });
+async function confirmStripeCheckoutSession(sessionId) {
+  const apiBase = getApiBaseUrl();
+  const fallbackUrl = `${apiBase}/api/booking/stripe/confirm-session-public`;
 
-  const payload = await response.json().catch(() => ({
-    ok: false,
-    error: `Payment confirmation failed with status ${response.status}.`
-  }));
+  async function requestConfirmation(url, accessToken) {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    if (hasText(accessToken)) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
 
-  if (!response.ok || payload?.ok !== true) {
-    throw new Error(String(payload?.error || `Payment confirmation failed with status ${response.status}.`));
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        sessionId
+      })
+    });
+
+    const payload = await response.json().catch(() => ({
+      ok: false,
+      error: `Payment confirmation failed with status ${response.status}.`
+    }));
+
+    if (!response.ok || payload?.ok !== true) {
+      throw new Error(String(payload?.error || `Payment confirmation failed with status ${response.status}.`));
+    }
+
+    return payload;
   }
 
-  return payload;
+  const {
+    data: { session }
+  } = await window.supabaseClient.auth.getSession();
+  const accessToken = session?.access_token || "";
+  const authUrl = `${apiBase}/api/booking/stripe/confirm-session`;
+  if (hasText(accessToken)) {
+    try {
+      return await requestConfirmation(authUrl, accessToken);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const canFallback =
+        /missing session token|invalid or expired session token|session expired|401|403/i.test(message) || !hasText(message);
+      if (!canFallback) {
+        throw error;
+      }
+    }
+  }
+
+  return requestConfirmation(fallbackUrl, "");
 }
 
 async function handleStripeCheckoutReturn() {
@@ -1238,26 +1342,41 @@ function renderStudentBookingSection() {
 }
 
 function populateStudentReviewForm(student) {
+  const reviewName = byId("student-review-name");
+  const reviewTrack = byId("student-review-track");
+  const reviewRole = byId("student-review-role");
+  const reviewText = byId("student-review-text");
+  const reviewSubmit = byId("student-review-submit");
+  const feedback = byId("student-review-feedback");
+  if (!reviewName || !reviewTrack || !reviewRole || !reviewText || !reviewSubmit || !feedback) {
+    return;
+  }
+
   const existingReview = findStudentReview(student);
 
-  document.getElementById("student-review-name").value = student.name;
-  document.getElementById("student-review-track").value = student.track;
-  document.getElementById("student-review-role").value = existingReview ? existingReview.role || "" : "";
-  document.getElementById("student-review-text").value = existingReview ? existingReview.text : "";
-  document.getElementById("student-review-submit").textContent = existingReview ? "Update Review" : "Submit Review";
+  reviewName.value = student.name;
+  reviewTrack.value = student.track;
+  reviewRole.value = existingReview ? existingReview.role || "" : "";
+  reviewText.value = existingReview ? existingReview.text : "";
+  reviewSubmit.textContent = existingReview ? "Update Review" : "Submit Review";
 
   selectedStudentRating = existingReview ? existingReview.rating : 0;
   setStudentStarPreview(selectedStudentRating);
 
-  const feedback = document.getElementById("student-review-feedback");
   feedback.hidden = true;
 }
 
 function renderStudentDashboard(student) {
   currentStudent = student;
 
-  const progressPercent = Math.round((student.completedLessons / student.totalLessons) * 100);
+  const totalLessons = Math.max(Number(student.totalLessons) || 0, 1);
+  const progressPercent = Math.max(0, Math.min(100, Math.round(((Number(student.completedLessons) || 0) / totalLessons) * 100)));
   const nextLesson = student.upcomingLessons.length ? student.upcomingLessons[0] : null;
+  const nextJoinLesson =
+    studentMeetingConfigured &&
+    Array.isArray(student.upcomingLessons)
+      ? student.upcomingLessons.find((lesson) => lesson.status === "free_first_lesson" || lesson.status === "confirmed_paid") || null
+      : null;
   const primaryFocus = student.focusAreas.length ? student.focusAreas[0] : student.track;
   const summaryCaption = nextLesson
     ? nextLesson.isFreeFirstLesson
@@ -1277,28 +1396,57 @@ function renderStudentDashboard(student) {
     ? `${formatStudentDate(nextLesson.date, nextLesson.time)} at ${nextLesson.time}`
     : "No lesson booked yet";
 
-  document.getElementById("student-dashboard-title").textContent = `Welcome back, ${student.name}`;
-  document.getElementById("student-summary-caption").textContent = summaryCaption;
-  document.getElementById("student-next-lesson-summary").textContent = nextLessonSummary;
-  document.getElementById("student-payment-summary").textContent = paymentSummary;
-  document.getElementById("student-focus-summary").textContent = primaryFocus;
-  document.getElementById("student-name-heading").textContent = "Progress Snapshot";
-  document.getElementById("student-track-label").textContent = student.track;
-  document.getElementById("student-level-label").textContent = `Level ${student.level}`;
-  document.getElementById("student-progress-count").textContent = student.completedLessons;
-  document.getElementById("student-progress-caption").textContent = `out of ${student.totalLessons} planned lessons`;
-  document.getElementById("student-streak-label").textContent = student.streak;
-  document.getElementById("student-progress-percent").textContent = `${progressPercent}%`;
-  document.getElementById("student-progress-bar").style.width = `${progressPercent}%`;
-  document.getElementById("student-milestone").textContent = student.nextMilestone;
-  document.getElementById("student-note").textContent = buildStudentCoachNote(student, nextLesson);
-  document.getElementById("student-book-link").href = "#student-booking-section";
+  setText("student-dashboard-title", `Welcome back, ${student.name}`);
+  setText("student-summary-caption", summaryCaption);
+  setText("student-next-lesson-summary", nextLessonSummary);
+  setText("student-payment-summary", paymentSummary);
+  setText("student-focus-summary", primaryFocus);
+  setText("student-name-heading", "Progress");
+  setText("student-track-label", student.track);
+  setText("student-level-label", `Level ${student.level}`);
+  setText("student-progress-count", student.completedLessons);
+  setText("student-progress-caption", `out of ${student.totalLessons} planned lessons`);
+  setText("student-streak-label", student.streak);
+  setText("student-progress-percent", `${progressPercent}%`);
+  setText("student-milestone", student.nextMilestone);
+  setText("student-note", buildStudentCoachNote(student, nextLesson));
 
-  document.getElementById("student-focus").innerHTML = student.focusAreas
-    .map((area) => `<span class="focus-chip">${area}</span>`)
-    .join("");
+  const progressBar = byId("student-progress-bar");
+  if (progressBar) {
+    progressBar.style.width = `${progressPercent}%`;
+  }
 
-  const upcomingContainer = document.getElementById("student-upcoming");
+  const focusContainer = byId("student-focus");
+  if (focusContainer) {
+    focusContainer.innerHTML = student.focusAreas
+      .map((area) => `<span class="focus-chip">${area}</span>`)
+      .join("");
+  }
+
+  const statusJoinButton = byId("student-status-join");
+  if (statusJoinButton) {
+    if (nextJoinLesson) {
+      statusJoinButton.hidden = false;
+      statusJoinButton.setAttribute("data-booking-id", String(nextJoinLesson.id || ""));
+      statusJoinButton.setAttribute("data-lesson-date", String(nextJoinLesson.date || ""));
+      statusJoinButton.setAttribute("data-lesson-time", String(nextJoinLesson.time || ""));
+    } else {
+      statusJoinButton.hidden = true;
+      statusJoinButton.setAttribute("data-booking-id", "");
+      statusJoinButton.setAttribute("data-lesson-date", "");
+      statusJoinButton.setAttribute("data-lesson-time", "");
+      statusJoinButton.disabled = true;
+      statusJoinButton.textContent = "Join Meeting";
+    }
+  }
+
+  const upcomingContainer = byId("student-upcoming");
+  if (!upcomingContainer) {
+    renderStudentBookingSection();
+    setStudentPortalSection(activeStudentPortalSection);
+    updateStudentMeetingButtons();
+    return;
+  }
   if (!student.upcomingLessons.length) {
     upcomingContainer.innerHTML = '<p class="empty-copy">No upcoming lessons are booked yet.</p>';
   } else {
@@ -1362,40 +1510,10 @@ function renderStudentDashboard(student) {
 
       const meetingButton = eventTarget.closest(".student-join-meeting");
       if (meetingButton) {
-        if (!studentMeetingConfigured) {
-          setStudentBookingFeedback("Meeting link is not configured yet.", "error");
-          return;
-        }
-
         const bookingId = String(meetingButton.getAttribute("data-booking-id") || "").trim();
         const date = String(meetingButton.getAttribute("data-lesson-date") || "");
         const time = String(meetingButton.getAttribute("data-lesson-time") || "");
-        const state = getMeetingJoinState(date, time);
-        if (!state.enabled) {
-          setStudentBookingFeedback(
-            `Join button unlocks ${studentMeetingEnableMinutesBefore} minutes before the lesson.`,
-            "error"
-          );
-          return;
-        }
-
-        meetingButton.disabled = true;
-        const originalLabel = meetingButton.textContent;
-        meetingButton.textContent = "Opening...";
-
-        const resolvedMeetingLink = studentMeetingDynamicPerBooking
-          ? await fetchStudentMeetingJoinLinkForBooking(bookingId)
-          : studentMeetingJoinLink;
-
-        meetingButton.disabled = false;
-        meetingButton.textContent = originalLabel || "Join Meeting";
-
-        if (!hasText(resolvedMeetingLink)) {
-          setStudentBookingFeedback("Could not open meeting link right now. Please try again.", "error");
-          return;
-        }
-
-        window.open(resolvedMeetingLink, "_blank", "noopener,noreferrer");
+        await openStudentMeetingForBooking({ bookingId, date, time, triggerButton: meetingButton });
         return;
       }
 
@@ -1784,6 +1902,11 @@ function bindStudentBookingSection() {
 }
 
 function bindStudentReviewForm() {
+  const reviewSubmitButton = byId("student-review-submit");
+  if (!reviewSubmitButton) {
+    return;
+  }
+
   document.querySelectorAll(".student-sp-star").forEach((star) => {
     star.addEventListener("mouseover", () => setStudentStarPreview(Number(star.dataset.val)));
     star.addEventListener("focus", () => setStudentStarPreview(Number(star.dataset.val)));
@@ -1792,17 +1915,26 @@ function bindStudentReviewForm() {
     star.addEventListener("click", () => {
       selectedStudentRating = Number(star.dataset.val);
       setStudentStarPreview(selectedStudentRating);
-      document.getElementById("student-review-feedback").hidden = true;
+      const reviewFeedback = byId("student-review-feedback");
+      if (reviewFeedback) {
+        reviewFeedback.hidden = true;
+      }
     });
   });
 
-  document.getElementById("student-review-submit").addEventListener("click", () => {
+  reviewSubmitButton.addEventListener("click", () => {
     if (!currentStudent) {
       return;
     }
 
-    const role = document.getElementById("student-review-role").value.trim();
-    const text = document.getElementById("student-review-text").value.trim();
+    const roleInput = byId("student-review-role");
+    const textInput = byId("student-review-text");
+    if (!roleInput || !textInput) {
+      return;
+    }
+
+    const role = roleInput.value.trim();
+    const text = textInput.value.trim();
 
     if (!selectedStudentRating) {
       setStudentReviewFeedback("Please choose a star rating.", "error");
@@ -1923,7 +2055,10 @@ function bindStudentLogin() {
     document.getElementById("student-dashboard").hidden = true;
     document.getElementById("student-email").value = "";
     document.getElementById("student-password").value = "";
-    document.getElementById("student-review-feedback").hidden = true;
+    const reviewFeedback = byId("student-review-feedback");
+    if (reviewFeedback) {
+      reviewFeedback.hidden = true;
+    }
     document.getElementById("student-booking-feedback").hidden = true;
     document.getElementById("student-login-feedback").hidden = true;
     document.getElementById("student-booking-message").value = "";

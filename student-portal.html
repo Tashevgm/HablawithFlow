@@ -28,25 +28,7 @@
   </header>
 
   <main class="site-main portal-main">
-    <section class="portal-hero">
-      <div>
-        <p class="hero-badge">Student Dashboard</p>
-        <h1>See your progress, upcoming lessons, and coaching notes in one place.</h1>
-        <p class="hero-copy">
-          The student portal keeps the same Hablawithflow feel while giving learners a simple place
-          to track their momentum.
-        </p>
-      </div>
-      <div class="portal-hero-card">
-        <div class="stat-stack">
-          <span class="stat-kicker">Portal access</span>
-          <strong class="stat-number stat-word">Use your real account</strong>
-          <span class="stat-caption">Sign in with the email and password you created when you registered.</span>
-        </div>
-      </div>
-    </section>
-
-    <section class="portal-shell">
+    <section class="portal-shell student-portal-shell">
       <div class="auth-card" id="student-login-card">
         <h2>Student Login</h2>
         <p class="section-sub portal-sub">
@@ -73,68 +55,73 @@
       </div>
 
       <div id="student-dashboard" hidden>
-        <section class="portal-grid portal-grid-full">
-          <article class="dashboard-card student-dashboard-hero">
-            <div class="dashboard-hero-top">
-              <div>
-                <span class="section-kicker">Student Space</span>
-                <h2 id="student-dashboard-title">Your dashboard</h2>
-                <p class="portal-sub" id="student-summary-caption">
-                  Track your lessons, payment status, and next learning step from one place.
-                </p>
-              </div>
-              <div class="portal-shortcuts portal-shortcuts-tight">
-                <a href="#student-booking-section" class="btn-outline portal-link" id="student-book-link">Book Lessons</a>
-                <a href="my-profile.html" class="btn-outline portal-link">My Profile</a>
-                <button class="btn-outline portal-link" id="student-logout" type="button">Log Out</button>
-              </div>
+        <section class="student-status-wrap">
+          <article class="dashboard-card student-status-bar">
+            <div class="student-status-intro">
+              <span class="section-kicker">Student Portal</span>
+              <h2 id="student-dashboard-title">Welcome back</h2>
+              <p class="portal-sub" id="student-summary-caption">Your next step is always visible here.</p>
             </div>
 
-            <div class="summary-pill-grid">
-              <article class="summary-pill accent-red">
+            <div class="student-status-metrics">
+              <article class="student-status-item">
                 <span>Next lesson</span>
-                <strong id="student-next-lesson-summary">No lesson booked yet</strong>
-                <em>Choose a slot below when you are ready.</em>
+                <strong id="student-next-lesson-summary">No lesson booked</strong>
               </article>
-              <article class="summary-pill accent-gold">
-                <span>Booking status</span>
-                <strong id="student-payment-summary">Waiting for your next booking</strong>
-                <em>Pay directly from your upcoming lessons when a booked class needs payment.</em>
+              <article class="student-status-item">
+                <span>Payment</span>
+                <strong id="student-payment-summary">Waiting for booking</strong>
               </article>
-              <article class="summary-pill accent-teal">
-                <span>Main focus</span>
-                <strong id="student-focus-summary">Conversation</strong>
-                <em>Your current learning direction.</em>
-              </article>
+              <button
+                class="list-action meet student-join-meeting student-status-join-btn"
+                id="student-status-join"
+                type="button"
+                data-booking-id=""
+                data-lesson-date=""
+                data-lesson-time=""
+                hidden
+                disabled
+              >
+                Join Meeting
+              </button>
             </div>
+            <span id="student-focus-summary" hidden></span>
           </article>
         </section>
 
-        <div class="view-switcher student-section-switcher" id="student-portal-nav" aria-label="Student portal sections">
-          <button class="view-switch-btn active" id="student-tab-book" type="button" data-student-section="book">Book Lessons</button>
-          <button class="view-switch-btn" id="student-tab-progress" type="button" data-student-section="progress">Track Progress</button>
-          <button class="view-switch-btn" id="student-tab-community" type="button" data-student-section="community">Join Community</button>
-        </div>
+        <section class="student-home-actions">
+          <div class="student-section-cards" id="student-portal-nav" aria-label="Student portal sections">
+            <button class="student-section-card active" type="button" data-student-section="book" aria-selected="true">
+              <strong>Book Lesson</strong>
+              <span>Pick date and time</span>
+            </button>
+            <button class="student-section-card" type="button" data-student-section="lessons" aria-selected="false">
+              <strong>My Lessons</strong>
+              <span>Pay, join, or cancel</span>
+            </button>
+            <button class="student-section-card" type="button" data-student-section="progress" aria-selected="false">
+              <strong>Progress</strong>
+              <span>Track your learning</span>
+            </button>
+            <button class="student-section-card" type="button" data-student-section="community" aria-selected="false">
+              <strong>Community</strong>
+              <span>Set up your profile</span>
+            </button>
+          </div>
+
+          <div class="student-home-links">
+            <a href="my-profile.html" class="btn-outline portal-link">My Profile</a>
+            <button class="btn-outline portal-link" id="student-logout" type="button">Log Out</button>
+          </div>
+        </section>
 
         <section class="student-portal-section active" id="student-section-book">
-          <section class="portal-grid">
-            <article class="dashboard-card">
-              <div class="card-heading">
-                <div>
-                  <h2>Upcoming Lessons</h2>
-                  <p class="portal-sub">Booked lessons and their current status appear here.</p>
-                </div>
-              </div>
-              <div class="stack-list" id="student-upcoming"></div>
-            </article>
-          </section>
-
           <section class="portal-grid portal-grid-full" id="student-booking-section">
             <article class="dashboard-card">
               <div class="card-heading">
                 <div>
-                  <h2>Book Your Next Lesson</h2>
-                  <p class="portal-sub">Choose your next available slot directly from your student profile.</p>
+                  <h2>Book Lesson</h2>
+                  <p class="portal-sub">Step 1: day. Step 2: time. Step 3: confirm.</p>
                 </div>
               </div>
 
@@ -152,16 +139,16 @@
                   <div class="card-heading">
                     <div>
                       <h3>Available Times</h3>
-                      <p class="portal-sub" id="student-booking-times-caption">Select a highlighted day to view times.</p>
+                      <p class="portal-sub" id="student-booking-times-caption">Select a day to view times.</p>
                     </div>
                   </div>
                   <div class="booking-time-list" id="student-booking-time-list"></div>
 
                   <div class="form-group booking-message-group">
-                    <label for="student-booking-message">Message for Vlad</label>
+                    <label for="student-booking-message">Optional note</label>
                     <textarea
                       id="student-booking-message"
-                      placeholder="Anything you want to focus on in the next lesson?"
+                      placeholder="What do you want to practice next?"
                     ></textarea>
                   </div>
 
@@ -175,22 +162,36 @@
           </section>
         </section>
 
+        <section class="student-portal-section" id="student-section-lessons" hidden>
+          <section class="portal-grid portal-grid-full">
+            <article class="dashboard-card">
+              <div class="card-heading">
+                <div>
+                  <h2>My Lessons</h2>
+                  <p class="portal-sub">Manage all booked lessons from one list.</p>
+                </div>
+              </div>
+              <div class="stack-list" id="student-upcoming"></div>
+            </article>
+          </section>
+        </section>
+
         <section class="student-portal-section" id="student-section-progress" hidden>
           <section class="portal-grid portal-grid-top">
             <article class="dashboard-card stat-card">
-              <span class="stat-kicker">Current track</span>
+              <span class="stat-kicker">Track</span>
               <strong class="stat-number stat-word" id="student-track-label">1-on-1</strong>
               <span class="stat-caption" id="student-level-label">Level A2</span>
             </article>
             <article class="dashboard-card stat-card">
-              <span class="stat-kicker">Lessons completed</span>
+              <span class="stat-kicker">Completed</span>
               <strong class="stat-number" id="student-progress-count">0</strong>
-              <span class="stat-caption" id="student-progress-caption">out of 0 planned lessons</span>
+              <span class="stat-caption" id="student-progress-caption">out of 0 lessons</span>
             </article>
             <article class="dashboard-card stat-card">
               <span class="stat-kicker">Streak</span>
               <strong class="stat-number" id="student-streak-label">0</strong>
-              <span class="stat-caption">consecutive study sessions</span>
+              <span class="stat-caption">sessions</span>
             </article>
           </section>
 
@@ -198,8 +199,8 @@
             <article class="dashboard-card">
               <div class="card-heading">
                 <div>
-                  <h2 id="student-name-heading">Progress Snapshot</h2>
-                  <p class="portal-sub">Your lesson momentum and next milestone.</p>
+                  <h2 id="student-name-heading">Progress</h2>
+                  <p class="portal-sub">Your current learning momentum.</p>
                 </div>
               </div>
 
@@ -228,7 +229,7 @@
               <div class="card-heading">
                 <div>
                   <h2>Coach Note</h2>
-                  <p class="portal-sub">Your latest personalized guidance from Vlad.</p>
+                  <p class="portal-sub">Latest note from Vlad.</p>
                 </div>
               </div>
               <p class="note-card" id="student-note"></p>
@@ -240,7 +241,7 @@
               <div class="card-heading">
                 <div>
                   <h2>Lesson History</h2>
-                  <p class="portal-sub">A running list of completed sessions and topics.</p>
+                  <p class="portal-sub">Your completed lessons.</p>
                 </div>
               </div>
               <div class="stack-list" id="student-history"></div>
@@ -254,61 +255,15 @@
               <div class="card-heading">
                 <div>
                   <h2>Join Our Community</h2>
-                  <p class="portal-sub">We are building a Spanish learning community around Hablawithflow. Be one of the first members.</p>
+                  <p class="portal-sub">Set up your profile now and be ready for upcoming community features.</p>
                 </div>
                 <div class="portal-shortcuts portal-shortcuts-tight">
-                  <a href="my-profile.html" class="btn-outline portal-link">Set Up My Community Profile</a>
+                  <a href="my-profile.html" class="btn-outline portal-link">Open My Profile</a>
                 </div>
               </div>
               <p class="note-card">
-                This space will grow into events, group conversations, and shared progress. For now, complete your profile so you are ready when community features go live.
+                We are preparing events, group conversations, and shared progress spaces.
               </p>
-            </article>
-          </section>
-
-          <section class="portal-grid portal-grid-full">
-            <article class="dashboard-card">
-              <div class="card-heading">
-                <div>
-                  <h2>Your Review</h2>
-                  <p class="portal-sub">Only signed-in students can submit or update a review.</p>
-                </div>
-              </div>
-
-              <div class="review-form review-form-portal" id="student-review-form">
-                <div class="star-label">Your rating *</div>
-                <div class="star-picker" id="student-star-picker" aria-label="Student star rating">
-                  <button class="sp-star student-sp-star" type="button" data-val="1" aria-label="Rate 1 star">&#9733;</button>
-                  <button class="sp-star student-sp-star" type="button" data-val="2" aria-label="Rate 2 stars">&#9733;</button>
-                  <button class="sp-star student-sp-star" type="button" data-val="3" aria-label="Rate 3 stars">&#9733;</button>
-                  <button class="sp-star student-sp-star" type="button" data-val="4" aria-label="Rate 4 stars">&#9733;</button>
-                  <button class="sp-star student-sp-star" type="button" data-val="5" aria-label="Rate 5 stars">&#9733;</button>
-                </div>
-
-                <div class="form-row">
-                  <div class="form-group">
-                    <label for="student-review-name">Student</label>
-                    <input type="text" id="student-review-name" readonly>
-                  </div>
-                  <div class="form-group">
-                    <label for="student-review-track">Track</label>
-                    <input type="text" id="student-review-track" readonly>
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  <label for="student-review-role">Role / Occupation</label>
-                  <input type="text" id="student-review-role" placeholder="e.g. Product Designer">
-                </div>
-
-                <div class="form-group">
-                  <label for="student-review-text">Your Review *</label>
-                  <textarea id="student-review-text" placeholder="Tell future students what working with Vlad has been like..."></textarea>
-                </div>
-
-                <button class="btn-submit" id="student-review-submit" type="button">Submit Review</button>
-                <div id="student-review-feedback" class="booking-feedback" hidden></div>
-              </div>
             </article>
           </section>
         </section>

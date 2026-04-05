@@ -213,8 +213,7 @@ Deno.serve(async (request) => {
 
       const supabase = createAdminClient();
       const updatePayload = {
-        status: "confirmed_paid",
-        paid_at: new Date().toISOString()
+        status: "confirmed_paid"
       };
 
       const { data, error } = await supabase

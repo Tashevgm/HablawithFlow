@@ -113,6 +113,95 @@ async function fetchStripeCheckoutSession(sessionId) {
   return payload;
 }
 
+async function fetchStripeActivePriceForProduct(productId) {
+  const encodedProductId = encodeURIComponent(productId);
+  const response = await fetch(`https://api.stripe.com/v1/prices?product=${encodedProductId}&active=true&limit=1`, {
+    headers: {
+      Authorization: `Bearer ${stripeSecretKey}`
+    }
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const stripeMessage = String(payload?.error?.message || "").trim() || `Stripe API request failed (${response.status}).`;
+    const error = new Error(stripeMessage);
+    error.statusCode = response.status >= 400 && response.status < 500 ? 400 : 502;
+    throw error;
+  }
+
+  const price = Array.isArray(payload?.data) ? payload.data[0] : null;
+  if (!price?.id) {
+    const error = new Error(`No active Stripe price found for product ${productId}.`);
+    error.statusCode = 500;
+    throw error;
+  }
+
+  return price;
+}
+
+async function createStripeCheckoutSession({
+  customerEmail,
+  studentId,
+  bookingId,
+  lessonType,
+  productId,
+  priceId,
+  successUrl,
+  cancelUrl
+}) {
+  const form = new URLSearchParams();
+  form.set("mode", "payment");
+  form.set("customer_email", customerEmail);
+  form.set("success_url", successUrl);
+  form.set("cancel_url", cancelUrl);
+  form.set("payment_method_types[0]", "card");
+  form.set("client_reference_id", studentId);
+  form.set("metadata[booking_id]", bookingId);
+  form.set("metadata[student_id]", studentId);
+  form.set("metadata[student_email]", customerEmail);
+  form.set("metadata[lesson_type]", lessonType);
+  form.set("metadata[product_id]", productId);
+  form.set("metadata[price_id]", priceId);
+  form.set("line_items[0][price]", priceId);
+  form.set("line_items[0][quantity]", "1");
+
+  const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${stripeSecretKey}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: form.toString()
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const stripeMessage = String(payload?.error?.message || "").trim() || `Stripe API request failed (${response.status}).`;
+    const error = new Error(stripeMessage);
+    error.statusCode = response.status >= 400 && response.status < 500 ? 400 : 502;
+    throw error;
+  }
+
+  return payload;
+}
+
+function readStripeSessionBookingContext(stripeSession) {
+  const metadata = stripeSession?.metadata && typeof stripeSession.metadata === "object" ? stripeSession.metadata : {};
+  const bookingId = String(metadata.booking_id || "").trim();
+  const metadataStudentId = String(metadata.student_id || "").trim();
+  const clientReferenceId = String(stripeSession?.client_reference_id || "").trim();
+  const studentId = required(metadataStudentId) ? metadataStudentId : clientReferenceId;
+  const paymentStatus = String(stripeSession?.payment_status || "").trim().toLowerCase();
+
+  return {
+    bookingId,
+    metadataStudentId,
+    clientReferenceId,
+    studentId,
+    paymentStatus
+  };
+}
+
 function jsonError(response, status, message) {
   return response.status(status).json({
     ok: false,
@@ -322,6 +411,27 @@ function normalizeBookingStatus(status) {
   }
 
   return rawStatus;
+}
+
+function normalizeLessonTypeForPayment(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function getLessonProductEnvName(lessonType) {
+  const normalized = normalizeLessonTypeForPayment(lessonType);
+
+  if (normalized === "1-on-1" || normalized === "1-on-1 lesson" || normalized === "1-on-1 class") {
+    return "STRIPE_PRODUCT_ONE_ON_ONE";
+  }
+
+  if (normalized === "group classes" || normalized === "group class") {
+    return "STRIPE_PRODUCT_GROUP_CLASSES";
+  }
+
+  return "";
 }
 
 function isBookingStatusActive(status) {
@@ -1275,7 +1385,9 @@ app.get("/api", (request, response) => {
         <li><strong>Registration email:</strong> <code>POST /api/email/register</code></li>
         <li><strong>Booking email:</strong> <code>POST /api/email/booking</code></li>
         <li><strong>Payment pending email:</strong> <code>POST /api/email/payment-pending</code></li>
+        <li><strong>Stripe checkout create:</strong> <code>POST /api/booking/stripe/create-session</code></li>
         <li><strong>Stripe payment confirm:</strong> <code>POST /api/booking/stripe/confirm-session</code></li>
+        <li><strong>Stripe payment confirm (fallback):</strong> <code>POST /api/booking/stripe/confirm-session-public</code></li>
         <li><strong>Meeting join link:</strong> <code>GET /api/meeting/join-link</code> or <code>GET /api/meeting/join-link?bookingId=...</code></li>
         <li><strong>Blocked slots:</strong> <code>GET /api/availability/blocked-slots</code></li>
         <li><strong>Teacher bookings:</strong> <code>GET /api/teacher/bookings</code></li>
@@ -1672,6 +1784,105 @@ app.post("/api/booking/confirm-email-complete", async (request, response) => {
   }
 });
 
+app.post("/api/booking/stripe/create-session", async (request, response) => {
+  try {
+    const user = await requireAuthenticatedUser(request, response);
+    if (!user) {
+      return;
+    }
+
+    if (!required(stripeSecretKey)) {
+      jsonError(response, 500, "Stripe secret key is not configured on the backend.");
+      return;
+    }
+
+    const profileRole = await getProfileRole(user.id);
+    const metadataRole = String(user?.user_metadata?.role || "").trim().toLowerCase();
+    const role = profileRole || metadataRole || "student";
+    if (role === "teacher" || role === "admin") {
+      jsonError(response, 403, "Teacher accounts cannot open student checkout.");
+      return;
+    }
+
+    const bookingId = String(request.body?.bookingId || request.body?.booking_id || "").trim();
+    if (!required(bookingId)) {
+      jsonError(response, 400, "No booking id was provided.");
+      return;
+    }
+
+    const { data: booking, error: bookingError } = await supabaseAdmin
+      .from("bookings")
+      .select("id, lesson_type, status")
+      .eq("id", bookingId)
+      .eq("student_id", user.id)
+      .maybeSingle();
+
+    if (bookingError) {
+      throw bookingError;
+    }
+    if (!booking) {
+      jsonError(response, 404, "Could not load the selected booking for checkout.");
+      return;
+    }
+
+    if (normalizeBookingStatus(booking.status) !== "pending_payment") {
+      jsonError(response, 400, "This booking is no longer waiting for payment.");
+      return;
+    }
+
+    const lessonType = String(booking.lesson_type || "1-on-1").trim();
+    const productEnvName = getLessonProductEnvName(lessonType);
+    if (!required(productEnvName)) {
+      jsonError(response, 400, `Unsupported lesson type for checkout: ${lessonType || "Unknown"}.`);
+      return;
+    }
+
+    const productId = String(process.env[productEnvName] || "").trim();
+    if (!required(productId)) {
+      jsonError(response, 500, `Missing Stripe product configuration (${productEnvName}).`);
+      return;
+    }
+
+    const price = await fetchStripeActivePriceForProduct(productId);
+
+    const requestOrigin = String(request.headers.origin || "").trim().replace(/\/+$/, "");
+    const configuredSiteUrl = String(process.env.SITE_URL || publicSiteUrl || "").trim().replace(/\/+$/, "");
+    const fallbackHostUrl = `${request.protocol}://${request.get("host")}`.replace(/\/+$/, "");
+    const siteUrl = required(requestOrigin) ? requestOrigin : required(configuredSiteUrl) ? configuredSiteUrl : fallbackHostUrl;
+
+    const checkoutSession = await createStripeCheckoutSession({
+      customerEmail: String(user.email || "").trim().toLowerCase(),
+      studentId: String(user.id || "").trim(),
+      bookingId: String(booking.id || "").trim(),
+      lessonType,
+      productId,
+      priceId: String(price.id || "").trim(),
+      successUrl: `${siteUrl}/student-portal.html?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${siteUrl}/student-portal.html?checkout=cancelled`
+    });
+
+    const checkoutUrl = String(checkoutSession?.url || "").trim();
+    if (!required(checkoutUrl)) {
+      jsonError(response, 500, "Stripe checkout session was created without a redirect URL.");
+      return;
+    }
+
+    response.json({
+      ok: true,
+      url: checkoutUrl,
+      sessionId: String(checkoutSession.id || "").trim()
+    });
+  } catch (error) {
+    console.error("Failed to create Stripe checkout session", error);
+    const statusCode = Number(error?.statusCode);
+    jsonError(
+      response,
+      Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599 ? statusCode : 500,
+      publicErrorMessage("Failed to create Stripe checkout session.", error)
+    );
+  }
+});
+
 app.post("/api/booking/stripe/confirm-session", async (request, response) => {
   try {
     const user = await requireAuthenticatedUser(request, response);
@@ -1690,10 +1901,7 @@ app.post("/api/booking/stripe/confirm-session", async (request, response) => {
     }
 
     const stripeSession = await fetchStripeCheckoutSession(sessionId);
-    const metadata = stripeSession?.metadata && typeof stripeSession.metadata === "object" ? stripeSession.metadata : {};
-    const bookingId = String(metadata.booking_id || "").trim();
-    const metadataStudentId = String(metadata.student_id || "").trim();
-    const clientReferenceId = String(stripeSession?.client_reference_id || "").trim();
+    const { bookingId, metadataStudentId, clientReferenceId, paymentStatus } = readStripeSessionBookingContext(stripeSession);
 
     if (!required(bookingId)) {
       jsonError(response, 400, "Stripe session is missing booking_id metadata.");
@@ -1709,7 +1917,6 @@ app.post("/api/booking/stripe/confirm-session", async (request, response) => {
       return;
     }
 
-    const paymentStatus = String(stripeSession?.payment_status || "").trim().toLowerCase();
     if (paymentStatus !== "paid") {
       response.json({
         ok: true,
@@ -1751,8 +1958,7 @@ app.post("/api/booking/stripe/confirm-session", async (request, response) => {
     const { data: updatedBooking, error: updateError } = await supabaseAdmin
       .from("bookings")
       .update({
-        status: "confirmed_paid",
-        paid_at: new Date().toISOString()
+        status: "confirmed_paid"
       })
       .eq("id", bookingId)
       .eq("student_id", userId)
@@ -1782,6 +1988,101 @@ app.post("/api/booking/stripe/confirm-session", async (request, response) => {
   }
 });
 
+app.post("/api/booking/stripe/confirm-session-public", async (request, response) => {
+  try {
+    if (!ensureSupabaseAdmin(response)) {
+      return;
+    }
+
+    const sessionId = String(request.body?.sessionId || "").trim();
+    if (!required(sessionId)) {
+      jsonError(response, 400, "Stripe checkout session id is required.");
+      return;
+    }
+
+    const stripeSession = await fetchStripeCheckoutSession(sessionId);
+    const { bookingId, studentId, paymentStatus } = readStripeSessionBookingContext(stripeSession);
+
+    if (!required(bookingId)) {
+      jsonError(response, 400, "Stripe session is missing booking_id metadata.");
+      return;
+    }
+    if (!required(studentId)) {
+      jsonError(response, 400, "Stripe session is missing student identity metadata.");
+      return;
+    }
+
+    if (paymentStatus !== "paid") {
+      response.json({
+        ok: true,
+        paid: false,
+        bookingId,
+        paymentStatus
+      });
+      return;
+    }
+
+    const { data: existingBooking, error: existingBookingError } = await supabaseAdmin
+      .from("bookings")
+      .select("id, status")
+      .eq("id", bookingId)
+      .eq("student_id", studentId)
+      .maybeSingle();
+
+    if (existingBookingError) {
+      throw existingBookingError;
+    }
+
+    if (!existingBooking) {
+      jsonError(response, 404, "Booking could not be found for this student.");
+      return;
+    }
+
+    const normalizedStatus = normalizeBookingStatus(existingBooking.status);
+    if (normalizedStatus === "confirmed_paid") {
+      response.json({
+        ok: true,
+        paid: true,
+        updated: false,
+        bookingId,
+        status: "confirmed_paid"
+      });
+      return;
+    }
+
+    const { data: updatedBooking, error: updateError } = await supabaseAdmin
+      .from("bookings")
+      .update({
+        status: "confirmed_paid"
+      })
+      .eq("id", bookingId)
+      .eq("student_id", studentId)
+      .in("status", ["pending_payment", "payment_submitted"])
+      .select("id, status")
+      .maybeSingle();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    response.json({
+      ok: true,
+      paid: true,
+      updated: Boolean(updatedBooking),
+      bookingId,
+      status: "confirmed_paid"
+    });
+  } catch (error) {
+    console.error("Failed to confirm Stripe checkout session without auth fallback", error);
+    const statusCode = Number(error?.statusCode);
+    jsonError(
+      response,
+      Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599 ? statusCode : 500,
+      publicErrorMessage("Failed to confirm Stripe checkout session.", error)
+    );
+  }
+});
+
 app.get("/api/teacher/students", async (request, response) => {
   try {
     const teacherUser = await requireTeacherAccess(request, response);
@@ -1791,53 +2092,138 @@ app.get("/api/teacher/students", async (request, response) => {
     const teacherUserId = String(teacherUser.id || "").trim();
     const teacherEmail = String(teacherUser.email || "").trim().toLowerCase();
 
-    const [{ data: profileRows, error: profileError }, authUsers] = await Promise.all([
+    const [{ data: profileRows, error: profileError }, authUsers, { data: bookingRows, error: bookingError }] = await Promise.all([
       supabaseAdmin.from("profiles").select("id, role, full_name, level, track, goal, notes"),
-      listAuthUsers(10)
+      listAuthUsers(10),
+      supabaseAdmin
+        .from("bookings")
+        .select("student_id, student_email, student_name")
     ]);
 
     if (profileError) {
       throw profileError;
     }
+    if (bookingError) {
+      throw bookingError;
+    }
 
     const authUserById = new Map(authUsers.map((user) => [user.id, user]));
-    const students = (profileRows || [])
-      .filter((profile) => String(profile.role || "student").toLowerCase() === "student")
-      .map((profile) => {
-        const authUser = authUserById.get(profile.id);
-        const email = (authUser?.email || "").trim().toLowerCase();
-        if (!required(email)) {
-          return null;
-        }
+    const profileById = new Map((profileRows || []).map((profile) => [String(profile.id || "").trim(), profile]));
+    const authUserByEmail = new Map(
+      authUsers
+        .filter((user) => required(user?.email))
+        .map((user) => [String(user.email || "").trim().toLowerCase(), user])
+    );
+    const normalizedOwnerEmail = required(ownerEmail) ? ownerEmail.trim().toLowerCase() : "";
 
-        if ((required(teacherUserId) && String(profile.id || "").trim() === teacherUserId) || (required(teacherEmail) && email === teacherEmail)) {
-          return null;
-        }
+    function shouldSkipStudent({ id, email, authUser, profile }) {
+      const normalizedId = String(id || "").trim();
+      const normalizedEmail = String(email || "").trim().toLowerCase();
+      const profileRole = String(profile?.role || "").trim().toLowerCase();
+      const metadataRole = String(authUser?.user_metadata?.role || "").trim().toLowerCase();
 
-        const metadataRole = String(authUser?.user_metadata?.role || "").trim().toLowerCase();
-        if (metadataRole === "teacher" || metadataRole === "admin") {
-          return null;
-        }
+      if ((required(teacherUserId) && normalizedId === teacherUserId) || (required(teacherEmail) && normalizedEmail === teacherEmail)) {
+        return true;
+      }
+      if (required(normalizedOwnerEmail) && normalizedEmail === normalizedOwnerEmail) {
+        return true;
+      }
+      if (profileRole === "teacher" || profileRole === "admin") {
+        return true;
+      }
+      if (metadataRole === "teacher" || metadataRole === "admin") {
+        return true;
+      }
+      return false;
+    }
 
-        if (required(ownerEmail) && email === ownerEmail.trim().toLowerCase()) {
-          return null;
-        }
+    function buildStudentRecord({ id, email, profile, authUser, bookingName }) {
+      const normalizedId = String(id || "").trim();
+      const normalizedEmail = String(email || "").trim().toLowerCase();
+      const metadataName = String(authUser?.user_metadata?.full_name || "").trim();
+      const preferredName = String(profile?.full_name || metadataName || bookingName || normalizedEmail.split("@")[0] || "Student").trim();
+      const studentId = required(normalizedId) ? normalizedId : normalizedEmail;
 
-        const metadataName = String(authUser?.user_metadata?.full_name || "").trim();
-        const fullName = String(profile.full_name || metadataName || email.split("@")[0]).trim();
+      return {
+        id: studentId,
+        email: normalizedEmail,
+        name: preferredName,
+        full_name: preferredName,
+        level: profile?.level || "Beginner",
+        track: profile?.track || "1-on-1",
+        goal: profile?.goal || "Conversation",
+        notes: profile?.notes || ""
+      };
+    }
 
-        return {
-          id: profile.id,
+    const studentsByKey = new Map();
+
+    for (const profile of profileRows || []) {
+      const profileId = String(profile.id || "").trim();
+      const authUser = authUserById.get(profileId);
+      const email = String(authUser?.email || "").trim().toLowerCase();
+
+      if (!required(email)) {
+        continue;
+      }
+      if (String(profile.role || "student").toLowerCase() !== "student") {
+        continue;
+      }
+      if (shouldSkipStudent({ id: profileId, email, authUser, profile })) {
+        continue;
+      }
+
+      const key = required(profileId) ? `id:${profileId}` : `email:${email}`;
+      studentsByKey.set(
+        key,
+        buildStudentRecord({
+          id: profileId,
           email,
-          name: fullName,
-          full_name: fullName,
-          level: profile.level || "Beginner",
-          track: profile.track || "1-on-1",
-          goal: profile.goal || "Conversation",
-          notes: profile.notes || ""
-        };
-      })
-      .filter(Boolean);
+          profile,
+          authUser
+        })
+      );
+    }
+
+    for (const booking of bookingRows || []) {
+      const bookingStudentId = String(booking.student_id || "").trim();
+      const bookingEmail = String(booking.student_email || "").trim().toLowerCase();
+      if (!required(bookingStudentId) && !required(bookingEmail)) {
+        continue;
+      }
+
+      const profile = required(bookingStudentId) ? profileById.get(bookingStudentId) : null;
+      const authUser =
+        (required(bookingStudentId) ? authUserById.get(bookingStudentId) : null) ||
+        (required(bookingEmail) ? authUserByEmail.get(bookingEmail) : null) ||
+        null;
+      const email = required(bookingEmail) ? bookingEmail : String(authUser?.email || "").trim().toLowerCase();
+      if (!required(email)) {
+        continue;
+      }
+
+      if (shouldSkipStudent({ id: bookingStudentId, email, authUser, profile })) {
+        continue;
+      }
+
+      const key = required(bookingStudentId) ? `id:${bookingStudentId}` : `email:${email}`;
+      if (studentsByKey.has(key)) {
+        continue;
+      }
+
+      studentsByKey.set(
+        key,
+        buildStudentRecord({
+          id: bookingStudentId,
+          email,
+          profile,
+          authUser,
+          bookingName: String(booking.student_name || "").trim()
+        })
+      );
+    }
+
+    const students = Array.from(studentsByKey.values()).sort((left, right) => String(left.name || "").localeCompare(String(right.name || "")));
 
     response.json({
       ok: true,
