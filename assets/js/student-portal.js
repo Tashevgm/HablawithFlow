@@ -573,6 +573,43 @@ async function saveServerBooking({ studentName, email, date, time, lessonType, m
     };
   }
 
+  const existingSameSlotForStudent = existingStudentBookings.find((booking) => {
+    const bookingDate = normalizeIsoDateValue(booking.lesson_date || booking.date || "");
+    const bookingTime = normalizeIsoTimeValue(booking.lesson_time || booking.time || "");
+    return bookingDate === date && bookingTime === time;
+  });
+
+  if (existingSameSlotForStudent) {
+    const existingStatusMeta = getBookingStatusMeta(existingSameSlotForStudent.status);
+    if (existingStatusMeta.active) {
+      return {
+        ok: false,
+        error: "You already have this lesson booked at that time."
+      };
+    }
+
+    const { data: reactivatedBooking, error: reactivateError } = await window.supabaseClient
+      .from("bookings")
+      .update({
+        student_email: email,
+        student_name: studentName,
+        lesson_type: lessonType,
+        timezone: currentStudent && currentStudent.timezone ? currentStudent.timezone : "Europe/London",
+        message,
+        status: isFreeFirstLessonBooking ? "confirmed_paid" : "pending_payment"
+      })
+      .eq("id", existingSameSlotForStudent.id)
+      .eq("student_id", currentSupabaseUserId)
+      .select()
+      .single();
+
+    if (reactivateError) {
+      return { ok: false, error: reactivateError.message };
+    }
+
+    return { ok: true, booking: reactivatedBooking };
+  }
+
   const { data, error } = await window.supabaseClient
     .from("bookings")
     .insert({
