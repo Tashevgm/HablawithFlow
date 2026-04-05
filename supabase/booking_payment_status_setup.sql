@@ -22,6 +22,34 @@ where coalesce(status, '') in ('', 'pending', 'awaiting_payment', 'awaiting paym
 
 alter table public.bookings enable row level security;
 
+drop policy if exists "Students read their own bookings" on public.bookings;
+create policy "Students read their own bookings"
+on public.bookings
+for select
+using (auth.uid() = student_id);
+
+drop policy if exists "Students insert their own bookings" on public.bookings;
+create policy "Students insert their own bookings"
+on public.bookings
+for insert
+with check (
+  auth.uid() = student_id
+  and status in ('pending_payment', 'confirmed_paid')
+);
+
+drop policy if exists "Teachers and admins read bookings" on public.bookings;
+create policy "Teachers and admins read bookings"
+on public.bookings
+for select
+using (
+  exists (
+    select 1
+    from public.profiles
+    where profiles.id = auth.uid()
+      and profiles.role in ('teacher', 'admin')
+  )
+);
+
 drop policy if exists "Students update their own bookings" on public.bookings;
 create policy "Students update their own bookings"
 on public.bookings
