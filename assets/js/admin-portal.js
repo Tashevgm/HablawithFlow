@@ -18,6 +18,9 @@ let teacherMeetingJoinLink = "";
 let teacherMeetingEnableMinutesBefore = 15;
 let teacherMeetingTickerId = 0;
 let teacherBookingsRefreshTickerId = 0;
+let teacherMeetingConfigured = false;
+let teacherMeetingDynamicPerBooking = false;
+let teacherBookingsLoadError = "";
 const DEFAULT_PROFILE_AVATAR =
   "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80";
 window.HWFServerBookings = window.HWFServerBookings || [];
@@ -565,6 +568,7 @@ function syncFocusedDateToFocusMonth() {
 }
 
 async function loadServerBookings() {
+  teacherBookingsLoadError = "";
   const previousBookings = Array.isArray(window.HWFServerBookings) ? window.HWFServerBookings : [];
   const fromApi = await fetchTeacherBookingsFromServer();
   if (Array.isArray(fromApi)) {
@@ -579,14 +583,23 @@ async function loadServerBookings() {
     .order("lesson_time", { ascending: true });
 
   if (error) {
+    if (!teacherBookingsLoadError) {
+      teacherBookingsLoadError = error.message || "Could not load bookings from Supabase.";
+    }
     return false;
   }
 
   if (!Array.isArray(data)) {
+    if (!teacherBookingsLoadError) {
+      teacherBookingsLoadError = "Bookings response is invalid.";
+    }
     return false;
   }
 
   if (!data.length && previousBookings.length) {
+    if (!teacherBookingsLoadError) {
+      teacherBookingsLoadError = "Bookings API returned empty data while existing bookings were already loaded.";
+    }
     return false;
   }
 
@@ -675,21 +688,36 @@ async function fetchTeacherBookingsFromServer() {
     });
 
     if (!result.ok) {
+      try {
+        const errorPayload = await result.json();
+        teacherBookingsLoadError = String(errorPayload?.error || "").trim() || `Teacher bookings API failed (${result.status}).`;
+      } catch {
+        teacherBookingsLoadError = `Teacher bookings API failed (${result.status}).`;
+      }
       return null;
     }
 
     const payload = await result.json();
     if (!payload || payload.ok !== true || !Array.isArray(payload.bookings)) {
+      teacherBookingsLoadError = "Teacher bookings API returned an invalid payload.";
       return null;
     }
 
+    teacherBookingsLoadError = "";
     return payload.bookings;
   } catch {
+    if (!teacherBookingsLoadError) {
+      teacherBookingsLoadError = "Could not reach the teacher bookings API.";
+    }
     return null;
   }
 }
 
 async function loadTeacherMeetingJoinConfig() {
+  teacherMeetingConfigured = false;
+  teacherMeetingDynamicPerBooking = false;
+  teacherMeetingJoinLink = "";
+
   if (!window.supabaseClient) {
     return;
   }
@@ -720,14 +748,65 @@ async function loadTeacherMeetingJoinConfig() {
     }
 
     const payload = await response.json();
-    if (!payload || payload.ok !== true || !payload.configured || !hasText(payload.joinLink)) {
+    if (!payload || payload.ok !== true || !payload.configured) {
       return;
     }
 
-    teacherMeetingJoinLink = String(payload.joinLink).trim();
+    teacherMeetingConfigured = true;
+    teacherMeetingDynamicPerBooking = Boolean(payload.dynamicPerBooking);
+    teacherMeetingJoinLink = hasText(payload.joinLink) ? String(payload.joinLink).trim() : "";
     teacherMeetingEnableMinutesBefore = Math.max(1, Number(payload.enableMinutesBefore || 15));
   } catch {
     // Keep disabled if API fails.
+  }
+}
+
+async function fetchTeacherMeetingJoinLinkForBooking(bookingId) {
+  if (!window.supabaseClient) {
+    return "";
+  }
+
+  const normalizedBookingId = String(bookingId || "").trim();
+  if (!normalizedBookingId) {
+    return "";
+  }
+
+  const {
+    data: { session }
+  } = await window.supabaseClient.auth.getSession();
+  const accessToken = session?.access_token || "";
+  if (!accessToken) {
+    return "";
+  }
+
+  const configuredApiBase =
+    window.HWF_APP_CONFIG && typeof window.HWF_APP_CONFIG.apiBase === "string"
+      ? window.HWF_APP_CONFIG.apiBase.trim()
+      : "";
+  const apiBase = configuredApiBase || window.location.origin;
+
+  try {
+    const response = await fetch(
+      `${apiBase}/api/meeting/join-link?bookingId=${encodeURIComponent(normalizedBookingId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      }
+    );
+
+    if (!response.ok) {
+      return "";
+    }
+
+    const payload = await response.json();
+    if (!payload || payload.ok !== true || !payload.configured || !hasText(payload.joinLink)) {
+      return "";
+    }
+
+    return String(payload.joinLink).trim();
+  } catch {
+    return "";
   }
 }
 
@@ -830,7 +909,9 @@ async function showTeacherDashboard() {
 
   const bookingsLoaded = await loadServerBookings();
   if (!bookingsLoaded) {
-    setDashboardActionError("Could not load latest bookings from server. Please refresh.");
+    setDashboardActionError(
+      teacherBookingsLoadError || "Could not load latest bookings from server. Please refresh."
+    );
   } else {
     clearDashboardActionError();
   }
@@ -921,6 +1002,8 @@ async function openTeacherDashboardFromSession() {
   if (!user) {
     currentTeacherUser = null;
     currentTeacherRole = "";
+    teacherMeetingConfigured = false;
+    teacherMeetingDynamicPerBooking = false;
     teacherMeetingJoinLink = "";
     stopTeacherLiveSync();
     if (IS_TEACHER_CALENDAR_PAGE || IS_TEACHER_STUDENTS_PAGE) {
@@ -933,6 +1016,8 @@ async function openTeacherDashboardFromSession() {
   if (!roleResult.ok) {
     currentTeacherUser = null;
     currentTeacherRole = "";
+    teacherMeetingConfigured = false;
+    teacherMeetingDynamicPerBooking = false;
     teacherMeetingJoinLink = "";
     stopTeacherLiveSync();
     await window.supabaseClient.auth.signOut();
@@ -1303,12 +1388,12 @@ function renderBookings() {
   container.innerHTML = bookings
     .map((booking) => {
       const statusMeta = getBookingStatusMeta(booking.status);
-      const hasMeetingLink = hasText(teacherMeetingJoinLink) && statusMeta.active;
+      const hasMeetingLink = teacherMeetingConfigured && statusMeta.value === "confirmed_paid";
       const meetingJoinState = hasMeetingLink
         ? getTeacherMeetingJoinState(booking.date, booking.time)
         : { enabled: false, label: "Join Meeting" };
       const paymentNote = statusMeta.value === "payment_submitted"
-        ? '<p class="list-card-note">Student completed checkout. Verify the payment, then mark this lesson as paid.</p>'
+        ? '<p class="list-card-note">Student completed checkout. Status should switch to paid automatically. Use Confirm Paid only if it does not update.</p>'
         : statusMeta.canMarkPaid
           ? '<p class="list-card-note warning">Students can cancel only after you mark this lesson as paid.</p>'
           : statusMeta.value === "cancelled_paid"
@@ -1332,6 +1417,7 @@ function renderBookings() {
                       ? `<button
                           class="list-action meet teacher-join-meeting"
                           type="button"
+                          data-booking-id="${booking.id}"
                           data-lesson-date="${booking.date}"
                           data-lesson-time="${booking.time}"
                           ${meetingJoinState.enabled ? "" : "disabled"}
@@ -1356,12 +1442,13 @@ function renderBookings() {
     .join("");
 
   container.querySelectorAll(".teacher-join-meeting").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (!hasText(teacherMeetingJoinLink)) {
+    button.addEventListener("click", async () => {
+      if (!teacherMeetingConfigured) {
         setDashboardActionError("Meeting link is not configured yet.");
         return;
       }
 
+      const bookingId = String(button.getAttribute("data-booking-id") || "").trim();
       const date = String(button.getAttribute("data-lesson-date") || "");
       const time = String(button.getAttribute("data-lesson-time") || "");
       const state = getTeacherMeetingJoinState(date, time);
@@ -1370,8 +1457,24 @@ function renderBookings() {
         return;
       }
 
+      button.disabled = true;
+      const originalLabel = button.textContent;
+      button.textContent = "Opening...";
+
+      const resolvedMeetingLink = teacherMeetingDynamicPerBooking
+        ? await fetchTeacherMeetingJoinLinkForBooking(bookingId)
+        : teacherMeetingJoinLink;
+
+      button.disabled = false;
+      button.textContent = originalLabel || "Join Meeting";
+
+      if (!hasText(resolvedMeetingLink)) {
+        setDashboardActionError("Could not open meeting link right now. Please try again.");
+        return;
+      }
+
       clearDashboardActionError();
-      window.open(teacherMeetingJoinLink, "_blank", "noopener,noreferrer");
+      window.open(resolvedMeetingLink, "_blank", "noopener,noreferrer");
     });
   });
 
@@ -2108,6 +2211,8 @@ function bindTeacherLogout() {
   button.addEventListener("click", async () => {
     currentTeacherUser = null;
     currentTeacherRole = "";
+    teacherMeetingConfigured = false;
+    teacherMeetingDynamicPerBooking = false;
     teacherMeetingJoinLink = "";
     stopTeacherLiveSync();
     if (teacherMeetingTickerId) {

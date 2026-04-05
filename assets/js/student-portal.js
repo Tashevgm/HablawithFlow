@@ -15,6 +15,8 @@ let activeStudentPortalSection = "book";
 let studentMeetingJoinLink = "";
 let studentMeetingEnableMinutesBefore = 15;
 let studentMeetingTickerId = 0;
+let studentMeetingConfigured = false;
+let studentMeetingDynamicPerBooking = false;
 const TEACHER_PORTAL_ROLES = new Set(["teacher", "admin"]);
 const DEFAULT_PROFILE_AVATAR =
   "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80";
@@ -179,6 +181,10 @@ function startStudentMeetingTicker() {
 }
 
 async function loadStudentMeetingJoinConfig() {
+  studentMeetingConfigured = false;
+  studentMeetingDynamicPerBooking = false;
+  studentMeetingJoinLink = "";
+
   if (!window.supabaseClient) {
     return;
   }
@@ -209,14 +215,65 @@ async function loadStudentMeetingJoinConfig() {
     }
 
     const payload = await response.json();
-    if (!payload || payload.ok !== true || !payload.configured || !hasText(payload.joinLink)) {
+    if (!payload || payload.ok !== true || !payload.configured) {
       return;
     }
 
-    studentMeetingJoinLink = String(payload.joinLink).trim();
+    studentMeetingConfigured = true;
+    studentMeetingDynamicPerBooking = Boolean(payload.dynamicPerBooking);
+    studentMeetingJoinLink = hasText(payload.joinLink) ? String(payload.joinLink).trim() : "";
     studentMeetingEnableMinutesBefore = Math.max(1, Number(payload.enableMinutesBefore || 15));
   } catch {
     // Keep meeting link disabled when API fails.
+  }
+}
+
+async function fetchStudentMeetingJoinLinkForBooking(bookingId) {
+  if (!window.supabaseClient) {
+    return "";
+  }
+
+  const normalizedBookingId = String(bookingId || "").trim();
+  if (!normalizedBookingId) {
+    return "";
+  }
+
+  const {
+    data: { session }
+  } = await window.supabaseClient.auth.getSession();
+  const accessToken = session?.access_token || "";
+  if (!accessToken) {
+    return "";
+  }
+
+  const configuredApiBase =
+    window.HWF_APP_CONFIG && typeof window.HWF_APP_CONFIG.apiBase === "string"
+      ? window.HWF_APP_CONFIG.apiBase.trim()
+      : "";
+  const apiBase = configuredApiBase || window.location.origin;
+
+  try {
+    const response = await fetch(
+      `${apiBase}/api/meeting/join-link?bookingId=${encodeURIComponent(normalizedBookingId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      }
+    );
+
+    if (!response.ok) {
+      return "";
+    }
+
+    const payload = await response.json();
+    if (!payload || payload.ok !== true || !payload.configured || !hasText(payload.joinLink)) {
+      return "";
+    }
+
+    return String(payload.joinLink).trim();
+  } catch {
+    return "";
   }
 }
 
@@ -330,6 +387,8 @@ async function openStudentDashboardFromSession() {
     currentStudent = null;
     currentSupabaseUserId = "";
     currentSupabaseUser = null;
+    studentMeetingConfigured = false;
+    studentMeetingDynamicPerBooking = false;
     studentMeetingJoinLink = "";
     await window.supabaseClient.auth.signOut();
     closeStudentSetupModal();
@@ -355,7 +414,7 @@ async function openStudentDashboardFromSession() {
   activeStudentPortalSection = "book";
   renderStudentDashboard(hydratedStudent);
   maybeOpenStudentSetupModal(hydratedStudent);
-  handleStripeCheckoutReturn();
+  await handleStripeCheckoutReturn();
 }
 
 async function listServerBookingsForCurrentStudent() {
@@ -919,19 +978,82 @@ async function createStripeCheckoutSession(bookingId) {
   return data.url;
 }
 
-function handleStripeCheckoutReturn() {
+async function confirmStripeCheckoutSession(sessionId) {
+  const {
+    data: { session }
+  } = await window.supabaseClient.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error("Your session expired before payment confirmation. Please sign in again.");
+  }
+
+  const configuredApiBase =
+    window.HWF_APP_CONFIG && typeof window.HWF_APP_CONFIG.apiBase === "string"
+      ? window.HWF_APP_CONFIG.apiBase.trim()
+      : "";
+  const apiBase = configuredApiBase || window.location.origin;
+
+  const response = await fetch(`${apiBase}/api/booking/stripe/confirm-session`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify({
+      sessionId
+    })
+  });
+
+  const payload = await response.json().catch(() => ({
+    ok: false,
+    error: `Payment confirmation failed with status ${response.status}.`
+  }));
+
+  if (!response.ok || payload?.ok !== true) {
+    throw new Error(String(payload?.error || `Payment confirmation failed with status ${response.status}.`));
+  }
+
+  return payload;
+}
+
+async function handleStripeCheckoutReturn() {
   const params = new URLSearchParams(window.location.search);
   const checkoutState = params.get("checkout");
+  const sessionId = params.get("session_id");
 
   if (!checkoutState) {
     return;
   }
 
   if (checkoutState === "success") {
-    setStudentBookingFeedback(
-      "Stripe checkout completed. If the lesson status still looks unchanged, wait a few seconds for the webhook and refresh.",
-      "success"
-    );
+    if (hasText(sessionId)) {
+      try {
+        const result = await confirmStripeCheckoutSession(sessionId);
+        if (result.paid) {
+          setStudentBookingFeedback("Payment confirmed. Your lesson is now marked as paid.", "success");
+        } else {
+          setStudentBookingFeedback("Checkout completed, but payment is still processing. Please refresh in a moment.", "error");
+        }
+
+        if (currentStudent) {
+          await loadActiveServerBookingsForAvailability();
+          const refreshedStudent = await hydrateStudentFromServer(currentStudent);
+          renderStudentDashboard(refreshedStudent);
+        }
+      } catch (error) {
+        setStudentBookingFeedback(
+          error instanceof Error
+            ? `Checkout completed, but automatic payment confirmation failed: ${error.message}`
+            : "Checkout completed, but automatic payment confirmation failed.",
+          "error"
+        );
+      }
+    } else {
+      setStudentBookingFeedback(
+        "Stripe checkout completed, but no session id was returned. Please refresh to check payment status.",
+        "error"
+      );
+    }
   } else if (checkoutState === "cancelled") {
     setStudentBookingFeedback("Stripe checkout was cancelled. Your lesson is still waiting for payment.", "error");
   }
@@ -1145,7 +1267,8 @@ function renderStudentDashboard(student) {
   } else {
     upcomingContainer.innerHTML = student.upcomingLessons
       .map((lesson) => {
-        const hasMeetingLink = hasText(studentMeetingJoinLink);
+        const isJoinEligibleLesson = lesson.status === "free_first_lesson" || lesson.status === "confirmed_paid";
+        const hasMeetingLink = studentMeetingConfigured && isJoinEligibleLesson;
         const meetingJoinState = hasMeetingLink
           ? getMeetingJoinState(lesson.date, lesson.time)
           : { enabled: false, label: "Join Meeting" };
@@ -1164,6 +1287,7 @@ function renderStudentDashboard(student) {
                       ? `<button
                           class="list-action meet student-join-meeting"
                           type="button"
+                          data-booking-id="${lesson.id}"
                           data-lesson-date="${lesson.date}"
                           data-lesson-time="${lesson.time}"
                           ${meetingJoinState.enabled ? "" : "disabled"}
@@ -1201,11 +1325,12 @@ function renderStudentDashboard(student) {
 
       const meetingButton = eventTarget.closest(".student-join-meeting");
       if (meetingButton) {
-        if (!hasText(studentMeetingJoinLink)) {
+        if (!studentMeetingConfigured) {
           setStudentBookingFeedback("Meeting link is not configured yet.", "error");
           return;
         }
 
+        const bookingId = String(meetingButton.getAttribute("data-booking-id") || "").trim();
         const date = String(meetingButton.getAttribute("data-lesson-date") || "");
         const time = String(meetingButton.getAttribute("data-lesson-time") || "");
         const state = getMeetingJoinState(date, time);
@@ -1217,7 +1342,23 @@ function renderStudentDashboard(student) {
           return;
         }
 
-        window.open(studentMeetingJoinLink, "_blank", "noopener,noreferrer");
+        meetingButton.disabled = true;
+        const originalLabel = meetingButton.textContent;
+        meetingButton.textContent = "Opening...";
+
+        const resolvedMeetingLink = studentMeetingDynamicPerBooking
+          ? await fetchStudentMeetingJoinLinkForBooking(bookingId)
+          : studentMeetingJoinLink;
+
+        meetingButton.disabled = false;
+        meetingButton.textContent = originalLabel || "Join Meeting";
+
+        if (!hasText(resolvedMeetingLink)) {
+          setStudentBookingFeedback("Could not open meeting link right now. Please try again.", "error");
+          return;
+        }
+
+        window.open(resolvedMeetingLink, "_blank", "noopener,noreferrer");
         return;
       }
 
@@ -1723,6 +1864,8 @@ function bindStudentLogin() {
     currentStudent = null;
     currentSupabaseUserId = "";
     currentSupabaseUser = null;
+    studentMeetingConfigured = false;
+    studentMeetingDynamicPerBooking = false;
     studentMeetingJoinLink = "";
     if (studentMeetingTickerId) {
       window.clearInterval(studentMeetingTickerId);

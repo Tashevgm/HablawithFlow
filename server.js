@@ -18,6 +18,13 @@ const emailOverrideTo = process.env.EMAIL_OVERRIDE_TO || "";
 const teacherInviteToken = process.env.TEACHER_INVITE_TOKEN || "";
 const publicSiteUrl = process.env.PUBLIC_SITE_URL || "https://hablawithflow.com";
 const googleMeetLink = process.env.GOOGLE_MEET_LINK || "";
+const meetingProvider = String(process.env.MEETING_PROVIDER || (googleMeetLink ? "google_meet" : "jitsi"))
+  .trim()
+  .toLowerCase();
+const jitsiBaseUrl = process.env.JITSI_BASE_URL || "https://meet.jit.si";
+const meetingRoomSecret =
+  process.env.MEETING_ROOM_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.TEACHER_INVITE_TOKEN || "hwf-room-secret";
+const meetingJoinEnableMinutes = Math.max(1, Number(process.env.MEETING_JOIN_ENABLE_MINUTES || 15));
 const lessonTimezoneDefault = process.env.LESSON_TIMEZONE_DEFAULT || "Europe/London";
 const bookingReminderMinutes = Math.max(1, Number(process.env.BOOKING_REMINDER_MINUTES || 15));
 const bookingReminderWindowMinutes = Math.max(1, Number(process.env.BOOKING_REMINDER_WINDOW_MINUTES || 5));
@@ -25,10 +32,26 @@ const bookingReminderPollMs = Math.max(15000, Number(process.env.BOOKING_REMINDE
 const TEACHER_ROLES = new Set(["teacher", "admin"]);
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
+const supabaseConfigLooksPlaceholder = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) {
+    return true;
+  }
+
+  return (
+    raw.includes("your-project-ref") ||
+    raw.includes("replace_with") ||
+    raw.includes("your_supabase_service_role_key")
+  );
+};
+const hasValidSupabaseAdminConfig =
+  !supabaseConfigLooksPlaceholder(supabaseUrl) &&
+  !supabaseConfigLooksPlaceholder(supabaseServiceRoleKey);
 
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 const supabaseAdmin =
-  supabaseUrl && supabaseServiceRoleKey
+  hasValidSupabaseAdminConfig
     ? createClient(supabaseUrl, supabaseServiceRoleKey, {
         auth: {
           autoRefreshToken: false,
@@ -62,6 +85,34 @@ function secureTokenMatch(expected, provided) {
   return crypto.timingSafeEqual(expectedBuffer, providedBuffer);
 }
 
+async function fetchStripeCheckoutSession(sessionId) {
+  if (!required(stripeSecretKey)) {
+    const error = new Error("Stripe secret key is not configured on the backend.");
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const encodedSessionId = encodeURIComponent(sessionId);
+  const response = await fetch(
+    `https://api.stripe.com/v1/checkout/sessions/${encodedSessionId}?expand[]=payment_intent`,
+    {
+      headers: {
+        Authorization: `Bearer ${stripeSecretKey}`
+      }
+    }
+  );
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const stripeMessage = String(payload?.error?.message || "").trim() || `Stripe API request failed (${response.status}).`;
+    const error = new Error(stripeMessage);
+    error.statusCode = response.status >= 400 && response.status < 500 ? 400 : 502;
+    throw error;
+  }
+
+  return payload;
+}
+
 function jsonError(response, status, message) {
   return response.status(status).json({
     ok: false,
@@ -83,7 +134,7 @@ function ensureSupabaseAdmin(response) {
     jsonError(
       response,
       500,
-      "Supabase admin is not configured. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to the server environment."
+      "Supabase admin is not configured. Add real SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY values (not placeholders)."
     );
     return false;
   }
@@ -180,6 +231,65 @@ function parseTimeParts(timeString) {
     hour,
     minute
   };
+}
+
+function normalizeLessonDateValue(value) {
+  const raw = String(value || "").trim();
+  if (!required(raw)) {
+    return "";
+  }
+
+  const prefixedDate = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (prefixedDate) {
+    return prefixedDate[1];
+  }
+
+  return raw;
+}
+
+function normalizeLessonTimeValue(value) {
+  const raw = String(value || "").trim();
+  if (!required(raw)) {
+    return "";
+  }
+
+  const matched = raw.match(/^(\d{1,2}):(\d{2})/);
+  if (matched) {
+    return `${String(Number(matched[1])).padStart(2, "0")}:${matched[2]}`;
+  }
+
+  return raw.slice(0, 5);
+}
+
+function normalizeMeetingProvider(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  return raw === "google_meet" || raw === "google" ? "google_meet" : "jitsi";
+}
+
+function buildMeetingRoomNameForBooking(bookingId) {
+  const normalizedBookingId = String(bookingId || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 18);
+  const digest = crypto
+    .createHash("sha256")
+    .update(`${String(bookingId || "").trim()}:${meetingRoomSecret}`)
+    .digest("hex")
+    .slice(0, 14);
+
+  return `hwf-${normalizedBookingId || "lesson"}-${digest}`;
+}
+
+function buildMeetingJoinLinkForBooking(bookingId) {
+  const provider = normalizeMeetingProvider(meetingProvider);
+  if (provider === "google_meet") {
+    return required(googleMeetLink) ? googleMeetLink.trim() : "";
+  }
+
+  const base = String(jitsiBaseUrl || "https://meet.jit.si").trim().replace(/\/+$/, "");
+  if (!required(base)) {
+    return "";
+  }
+
+  const room = buildMeetingRoomNameForBooking(bookingId);
+  return `${base}/${room}`;
 }
 
 function normalizeBookingStatus(status) {
@@ -363,6 +473,34 @@ async function getProfileRole(userId) {
   return String(data?.role || "").trim().toLowerCase();
 }
 
+async function hasTeacherProfile(userId) {
+  if (!supabaseAdmin) {
+    return false;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("teacher_profiles")
+    .select("id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    return false;
+  }
+
+  return required(String(data?.id || ""));
+}
+
+async function isTeacherUser(user) {
+  const metadataRole = String(user?.user_metadata?.role || "").trim().toLowerCase();
+  const profileRole = await getProfileRole(user?.id || "");
+  if (TEACHER_ROLES.has(profileRole || metadataRole)) {
+    return true;
+  }
+
+  return hasTeacherProfile(user?.id || "");
+}
+
 async function requireTeacherAccess(request, response) {
   const user = await requireAuthenticatedUser(request, response);
   if (!user) {
@@ -371,9 +509,10 @@ async function requireTeacherAccess(request, response) {
 
   const metadataRole = String(user.user_metadata?.role || "").trim().toLowerCase();
   const profileRole = await getProfileRole(user.id);
+  const teacherProfileExists = await hasTeacherProfile(user.id);
   const role = profileRole || metadataRole;
 
-  if (!TEACHER_ROLES.has(role)) {
+  if (!TEACHER_ROLES.has(role) && !teacherProfileExists) {
     jsonError(response, 403, "Teacher access only.");
     return null;
   }
@@ -643,7 +782,7 @@ function lessonReminderHtml({ studentName, lessonType, lessonStartLabel, meetLin
         <div style="padding:32px 28px;">
           <p style="margin:0 0 14px;font-size:18px;line-height:1.6;">Hi ${escapeHtml(studentName)},</p>
           <p style="margin:0 0 22px;font-size:16px;line-height:1.7;color:#514741;">
-            Your Hablawithflow lesson is starting soon. Use the Google Meet link below to join on time.
+            Your Hablawithflow lesson is starting soon. Use the lesson link below to join on time.
           </p>
 
           <div style="margin:0 0 24px;padding:20px;border-radius:18px;background:#fbf5ef;border:1px solid #efe1d5;">
@@ -664,7 +803,7 @@ function lessonReminderHtml({ studentName, lessonType, lessonStartLabel, meetLin
 
           <div style="margin:0 0 24px;">
             <a href="${escapeHtml(meetLink)}" style="display:inline-block;padding:14px 22px;border-radius:10px;background:#c0392b;color:#ffffff;text-decoration:none;font-weight:700;">
-              Join Google Meet
+              Join Lesson
             </a>
           </div>
 
@@ -682,7 +821,7 @@ let reminderWorkerRunning = false;
 let reminderSchemaReady = true;
 
 async function processBookingReminderBatch() {
-  if (reminderWorkerRunning || !supabaseAdmin || !resend || !required(googleMeetLink) || !reminderSchemaReady) {
+  if (reminderWorkerRunning || !supabaseAdmin || !resend || !reminderSchemaReady) {
     return { ok: false, sent: 0, checked: 0, reason: "disabled_or_busy" };
   }
 
@@ -737,6 +876,10 @@ async function processBookingReminderBatch() {
       const studentName = required(booking.student_name) ? booking.student_name.trim() : booking.student_email.split("@")[0];
       const lessonType = required(booking.lesson_type) ? booking.lesson_type.trim() : "Spanish lesson";
       const lessonStartLabel = formatLessonStartLabel(booking.lesson_date, booking.lesson_time, booking.timezone || lessonTimezoneDefault);
+      const meetingJoinLink = buildMeetingJoinLinkForBooking(booking.id);
+      if (!required(meetingJoinLink)) {
+        continue;
+      }
 
       await sendEmailWithResend({
         from: emailFrom,
@@ -746,7 +889,7 @@ async function processBookingReminderBatch() {
           studentName,
           lessonType,
           lessonStartLabel,
-          meetLink: googleMeetLink.trim(),
+          meetLink: meetingJoinLink,
           minutesBefore: bookingReminderMinutes
         })
       }, "lesson reminder");
@@ -791,8 +934,8 @@ function startBookingReminderWorker() {
     return;
   }
 
-  if (!required(googleMeetLink)) {
-    console.log("Booking reminder worker disabled: GOOGLE_MEET_LINK is not configured.");
+  if (normalizeMeetingProvider(meetingProvider) === "google_meet" && !required(googleMeetLink)) {
+    console.log("Booking reminder worker disabled: meeting provider is google_meet but GOOGLE_MEET_LINK is not configured.");
     return;
   }
 
@@ -1132,7 +1275,8 @@ app.get("/api", (request, response) => {
         <li><strong>Registration email:</strong> <code>POST /api/email/register</code></li>
         <li><strong>Booking email:</strong> <code>POST /api/email/booking</code></li>
         <li><strong>Payment pending email:</strong> <code>POST /api/email/payment-pending</code></li>
-        <li><strong>Meeting join link:</strong> <code>GET /api/meeting/join-link</code></li>
+        <li><strong>Stripe payment confirm:</strong> <code>POST /api/booking/stripe/confirm-session</code></li>
+        <li><strong>Meeting join link:</strong> <code>GET /api/meeting/join-link</code> or <code>GET /api/meeting/join-link?bookingId=...</code></li>
         <li><strong>Blocked slots:</strong> <code>GET /api/availability/blocked-slots</code></li>
         <li><strong>Teacher bookings:</strong> <code>GET /api/teacher/bookings</code></li>
         <li><strong>Owner test email:</strong> <code>POST /api/owner/email-test</code></li>
@@ -1143,10 +1287,32 @@ app.get("/api", (request, response) => {
   `);
 });
 
-app.get("/api/health", (request, response) => {
+app.get("/api/health", async (request, response) => {
+  let supabaseAdminConnected = false;
+  let supabaseAdminConnectionError = "";
+  if (supabaseAdmin) {
+    try {
+      const { error } = await supabaseAdmin.from("bookings").select("id", { head: true, count: "exact" }).limit(1);
+      if (error) {
+        throw error;
+      }
+      supabaseAdminConnected = true;
+    } catch (error) {
+      supabaseAdminConnectionError = String(error?.message || "Unknown Supabase connection error.");
+    }
+  }
+
   response.json({
     ok: true,
     service: "hablawithflow-app-backend",
+    meeting: {
+      provider: normalizeMeetingProvider(meetingProvider),
+      configured:
+        normalizeMeetingProvider(meetingProvider) === "google_meet"
+          ? required(googleMeetLink)
+          : required(String(jitsiBaseUrl || "").trim()),
+      enableMinutesBefore: meetingJoinEnableMinutes
+    },
     email: {
       provider: "resend",
       configured: Boolean(resendApiKey),
@@ -1155,7 +1321,9 @@ app.get("/api/health", (request, response) => {
       ownerConfigured: required(ownerEmail),
       teacherNotificationRecipients: listBookingNotificationRecipients().length
     },
-    supabaseAdminConfigured: Boolean(supabaseAdmin)
+    supabaseAdminConfigured: Boolean(supabaseAdmin),
+    supabaseAdminConnected,
+    supabaseAdminConnectionError
   });
 });
 
@@ -1166,12 +1334,81 @@ app.get("/api/meeting/join-link", async (request, response) => {
       return;
     }
 
-    const configured = required(googleMeetLink);
+    const provider = normalizeMeetingProvider(meetingProvider);
+    const bookingId = String(request.query?.bookingId || "").trim();
+
+    if (!required(bookingId)) {
+      const defaultJoinLink = provider === "google_meet" ? buildMeetingJoinLinkForBooking("") : "";
+      response.json({
+        ok: true,
+        configured: required(defaultJoinLink) || provider === "jitsi",
+        provider,
+        dynamicPerBooking: provider === "jitsi",
+        joinLink: defaultJoinLink,
+        enableMinutesBefore: meetingJoinEnableMinutes
+      });
+      return;
+    }
+
+    const { data: booking, error: bookingError } = await supabaseAdmin
+      .from("bookings")
+      .select("id, student_id, lesson_date, lesson_time, timezone, status")
+      .eq("id", bookingId)
+      .maybeSingle();
+
+    if (bookingError) {
+      throw bookingError;
+    }
+
+    if (!booking) {
+      jsonError(response, 404, "Booking was not found.");
+      return;
+    }
+
+    const sessionUserId = String(user.id || "").trim();
+    const bookingStudentId = String(booking.student_id || "").trim();
+    const isLessonStudent = required(sessionUserId) && required(bookingStudentId) && sessionUserId === bookingStudentId;
+    const teacherUser = await isTeacherUser(user);
+
+    if (!isLessonStudent && !teacherUser) {
+      jsonError(response, 403, "You are not allowed to join this booking.");
+      return;
+    }
+
+    const bookingStatus = normalizeBookingStatus(booking.status);
+    if (bookingStatus !== "confirmed_paid") {
+      jsonError(response, 403, "Meeting link is available only for paid lessons.");
+      return;
+    }
+
+    const lessonStart = zonedLessonStartToUtc(
+      normalizeLessonDateValue(booking.lesson_date),
+      normalizeLessonTimeValue(booking.lesson_time),
+      required(booking.timezone) ? booking.timezone : lessonTimezoneDefault
+    );
+    if (!lessonStart) {
+      jsonError(response, 400, "Lesson date/time is invalid.");
+      return;
+    }
+
+    const openAt = addMinutes(lessonStart, -meetingJoinEnableMinutes);
+    const closeAt = addMinutes(lessonStart, 120);
+    const now = new Date();
+    if (now < openAt || now > closeAt) {
+      jsonError(response, 403, `Meeting link unlocks ${meetingJoinEnableMinutes} minutes before the lesson.`);
+      return;
+    }
+
+    const joinLink = buildMeetingJoinLinkForBooking(booking.id);
+    const configured = required(joinLink);
     response.json({
       ok: true,
+      bookingId: String(booking.id),
       configured,
-      joinLink: configured ? googleMeetLink.trim() : "",
-      enableMinutesBefore: 15
+      provider,
+      dynamicPerBooking: provider === "jitsi",
+      joinLink: configured ? joinLink : "",
+      enableMinutesBefore: meetingJoinEnableMinutes
     });
   } catch (error) {
     console.error("Failed to resolve meeting join link", error);
@@ -1202,9 +1439,9 @@ app.get("/api/availability/blocked-slots", async (request, response) => {
       ok: true,
       blockedSlots: Array.isArray(data)
         ? data.map((row) => ({
-            date: String(row.lesson_date || "").trim(),
-            time: String(row.lesson_time || "").slice(0, 5),
-            status: String(row.status || "").trim().toLowerCase()
+            date: normalizeLessonDateValue(row.lesson_date),
+            time: normalizeLessonTimeValue(row.lesson_time),
+            status: normalizeBookingStatus(row.status)
           }))
         : []
     });
@@ -1435,6 +1672,116 @@ app.post("/api/booking/confirm-email-complete", async (request, response) => {
   }
 });
 
+app.post("/api/booking/stripe/confirm-session", async (request, response) => {
+  try {
+    const user = await requireAuthenticatedUser(request, response);
+    if (!user) {
+      return;
+    }
+
+    if (!ensureSupabaseAdmin(response)) {
+      return;
+    }
+
+    const sessionId = String(request.body?.sessionId || "").trim();
+    if (!required(sessionId)) {
+      jsonError(response, 400, "Stripe checkout session id is required.");
+      return;
+    }
+
+    const stripeSession = await fetchStripeCheckoutSession(sessionId);
+    const metadata = stripeSession?.metadata && typeof stripeSession.metadata === "object" ? stripeSession.metadata : {};
+    const bookingId = String(metadata.booking_id || "").trim();
+    const metadataStudentId = String(metadata.student_id || "").trim();
+    const clientReferenceId = String(stripeSession?.client_reference_id || "").trim();
+
+    if (!required(bookingId)) {
+      jsonError(response, 400, "Stripe session is missing booking_id metadata.");
+      return;
+    }
+
+    const userId = String(user.id || "").trim();
+    const sessionBelongsToUser =
+      (required(metadataStudentId) && metadataStudentId === userId) ||
+      (required(clientReferenceId) && clientReferenceId === userId);
+    if (!sessionBelongsToUser) {
+      jsonError(response, 403, "This Stripe session does not belong to the current user.");
+      return;
+    }
+
+    const paymentStatus = String(stripeSession?.payment_status || "").trim().toLowerCase();
+    if (paymentStatus !== "paid") {
+      response.json({
+        ok: true,
+        paid: false,
+        bookingId,
+        paymentStatus
+      });
+      return;
+    }
+
+    const { data: existingBooking, error: existingBookingError } = await supabaseAdmin
+      .from("bookings")
+      .select("id, status")
+      .eq("id", bookingId)
+      .eq("student_id", userId)
+      .maybeSingle();
+
+    if (existingBookingError) {
+      throw existingBookingError;
+    }
+
+    if (!existingBooking) {
+      jsonError(response, 404, "Booking could not be found for this student.");
+      return;
+    }
+
+    const normalizedStatus = normalizeBookingStatus(existingBooking.status);
+    if (normalizedStatus === "confirmed_paid") {
+      response.json({
+        ok: true,
+        paid: true,
+        updated: false,
+        bookingId,
+        status: "confirmed_paid"
+      });
+      return;
+    }
+
+    const { data: updatedBooking, error: updateError } = await supabaseAdmin
+      .from("bookings")
+      .update({
+        status: "confirmed_paid",
+        paid_at: new Date().toISOString()
+      })
+      .eq("id", bookingId)
+      .eq("student_id", userId)
+      .in("status", ["pending_payment", "payment_submitted"])
+      .select("id, status")
+      .maybeSingle();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    response.json({
+      ok: true,
+      paid: true,
+      updated: Boolean(updatedBooking),
+      bookingId,
+      status: "confirmed_paid"
+    });
+  } catch (error) {
+    console.error("Failed to confirm Stripe checkout session", error);
+    const statusCode = Number(error?.statusCode);
+    jsonError(
+      response,
+      Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599 ? statusCode : 500,
+      publicErrorMessage("Failed to confirm Stripe checkout session.", error)
+    );
+  }
+});
+
 app.get("/api/teacher/students", async (request, response) => {
   try {
     const teacherUser = await requireTeacherAccess(request, response);
@@ -1521,7 +1868,14 @@ app.get("/api/teacher/bookings", async (request, response) => {
 
     response.json({
       ok: true,
-      bookings: Array.isArray(data) ? data : []
+      bookings: Array.isArray(data)
+        ? data.map((booking) => ({
+            ...booking,
+            lesson_date: normalizeLessonDateValue(booking.lesson_date),
+            lesson_time: normalizeLessonTimeValue(booking.lesson_time),
+            status: normalizeBookingStatus(booking.status)
+          }))
+        : []
     });
   } catch (error) {
     console.error("Failed to fetch teacher bookings", error);
