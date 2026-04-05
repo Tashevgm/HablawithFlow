@@ -2811,9 +2811,19 @@ textarea {
   color: #11705d;
 }
 
+.list-action.meet {
+  background: rgba(52, 152, 219, 0.14);
+  color: #1f5f8b;
+}
+
 .list-action.pay:hover,
 .list-action.pay:focus-visible {
   background: rgba(26, 188, 156, 0.2);
+}
+
+.list-action.meet:hover,
+.list-action.meet:focus-visible {
+  background: rgba(52, 152, 219, 0.2);
 }
 
 .list-action.danger {

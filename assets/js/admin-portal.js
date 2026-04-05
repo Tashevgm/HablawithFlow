@@ -14,6 +14,10 @@ let focusedDate = "";
 let currentTeacherUser = null;
 let currentTeacherRole = "";
 let teacherProfileEditorBound = false;
+let teacherMeetingJoinLink = "";
+let teacherMeetingEnableMinutesBefore = 15;
+let teacherMeetingTickerId = 0;
+let teacherBookingsRefreshTickerId = 0;
 const DEFAULT_PROFILE_AVATAR =
   "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80";
 window.HWFServerBookings = window.HWFServerBookings || [];
@@ -24,6 +28,10 @@ function getPasswordResetRedirect() {
 
 function byId(id) {
   return document.getElementById(id);
+}
+
+function hasText(value) {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function normalizeEmail(email) {
@@ -115,6 +123,91 @@ function formatLongDate(dateString) {
     month: "long",
     day: "numeric"
   });
+}
+
+function parseLessonStart(date, time) {
+  const parsed = new Date(`${date}T${time}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getTeacherMeetingJoinState(date, time) {
+  const start = parseLessonStart(date, time);
+  if (!start) {
+    return {
+      enabled: false,
+      label: "Join Meeting"
+    };
+  }
+
+  const now = new Date();
+  const enableAt = new Date(start.getTime() - teacherMeetingEnableMinutesBefore * 60 * 1000);
+  const closeAt = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  const enabled = now >= enableAt && now <= closeAt;
+
+  if (enabled) {
+    return {
+      enabled: true,
+      label: "Join Meeting"
+    };
+  }
+
+  return {
+    enabled: false,
+    label: `Join in ${teacherMeetingEnableMinutesBefore} min`
+  };
+}
+
+function updateTeacherMeetingButtons() {
+  const buttons = document.querySelectorAll(".teacher-join-meeting");
+  if (!buttons.length) {
+    return;
+  }
+
+  buttons.forEach((button) => {
+    const date = String(button.getAttribute("data-lesson-date") || "");
+    const time = String(button.getAttribute("data-lesson-time") || "");
+    const state = getTeacherMeetingJoinState(date, time);
+    button.disabled = !state.enabled;
+    button.textContent = state.label;
+  });
+}
+
+function startTeacherMeetingTicker() {
+  if (teacherMeetingTickerId) {
+    window.clearInterval(teacherMeetingTickerId);
+  }
+
+  teacherMeetingTickerId = window.setInterval(() => {
+    updateTeacherMeetingButtons();
+  }, 30000);
+}
+
+function stopTeacherLiveSync() {
+  if (teacherBookingsRefreshTickerId) {
+    window.clearInterval(teacherBookingsRefreshTickerId);
+    teacherBookingsRefreshTickerId = 0;
+  }
+}
+
+function startTeacherLiveSync() {
+  stopTeacherLiveSync();
+  teacherBookingsRefreshTickerId = window.setInterval(async () => {
+    if (!currentTeacherUser) {
+      return;
+    }
+
+    const dashboard = byId("admin-dashboard");
+    if (!dashboard || dashboard.hidden) {
+      return;
+    }
+
+    const loaded = await loadServerBookings();
+    if (!loaded) {
+      return;
+    }
+
+    renderAdminDashboard();
+  }, 15000);
 }
 
 function formatRangeLabel(weekStart) {
@@ -472,6 +565,7 @@ function syncFocusedDateToFocusMonth() {
 }
 
 async function loadServerBookings() {
+  const previousBookings = Array.isArray(window.HWFServerBookings) ? window.HWFServerBookings : [];
   const fromApi = await fetchTeacherBookingsFromServer();
   if (Array.isArray(fromApi)) {
     window.HWFServerBookings = fromApi;
@@ -488,7 +582,15 @@ async function loadServerBookings() {
     return false;
   }
 
-  window.HWFServerBookings = Array.isArray(data) ? data : [];
+  if (!Array.isArray(data)) {
+    return false;
+  }
+
+  if (!data.length && previousBookings.length) {
+    return false;
+  }
+
+  window.HWFServerBookings = data;
   return true;
 }
 
@@ -584,6 +686,48 @@ async function fetchTeacherBookingsFromServer() {
     return payload.bookings;
   } catch {
     return null;
+  }
+}
+
+async function loadTeacherMeetingJoinConfig() {
+  if (!window.supabaseClient) {
+    return;
+  }
+
+  const {
+    data: { session }
+  } = await window.supabaseClient.auth.getSession();
+  const accessToken = session?.access_token || "";
+  if (!accessToken) {
+    return;
+  }
+
+  const configuredApiBase =
+    window.HWF_APP_CONFIG && typeof window.HWF_APP_CONFIG.apiBase === "string"
+      ? window.HWF_APP_CONFIG.apiBase.trim()
+      : "";
+  const apiBase = configuredApiBase || window.location.origin;
+
+  try {
+    const response = await fetch(`${apiBase}/api/meeting/join-link`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = await response.json();
+    if (!payload || payload.ok !== true || !payload.configured || !hasText(payload.joinLink)) {
+      return;
+    }
+
+    teacherMeetingJoinLink = String(payload.joinLink).trim();
+    teacherMeetingEnableMinutesBefore = Math.max(1, Number(payload.enableMinutesBefore || 15));
+  } catch {
+    // Keep disabled if API fails.
   }
 }
 
@@ -684,9 +828,15 @@ async function showTeacherDashboard() {
     dashboard.hidden = false;
   }
 
-  await loadServerBookings();
+  const bookingsLoaded = await loadServerBookings();
+  if (!bookingsLoaded) {
+    setDashboardActionError("Could not load latest bookings from server. Please refresh.");
+  } else {
+    clearDashboardActionError();
+  }
   await syncStudentsFromServerProfiles();
   renderAdminDashboard();
+  startTeacherLiveSync();
 }
 
 async function getTeacherRoleForUser(userId) {
@@ -771,6 +921,8 @@ async function openTeacherDashboardFromSession() {
   if (!user) {
     currentTeacherUser = null;
     currentTeacherRole = "";
+    teacherMeetingJoinLink = "";
+    stopTeacherLiveSync();
     if (IS_TEACHER_CALENDAR_PAGE || IS_TEACHER_STUDENTS_PAGE) {
       redirectToTeacherLogin();
     }
@@ -781,6 +933,8 @@ async function openTeacherDashboardFromSession() {
   if (!roleResult.ok) {
     currentTeacherUser = null;
     currentTeacherRole = "";
+    teacherMeetingJoinLink = "";
+    stopTeacherLiveSync();
     await window.supabaseClient.auth.signOut();
     if (IS_TEACHER_LOGIN_PAGE) {
       showTeacherError(roleResult.error);
@@ -797,6 +951,7 @@ async function openTeacherDashboardFromSession() {
 
   currentTeacherUser = user;
   currentTeacherRole = roleResult.role || "teacher";
+  await loadTeacherMeetingJoinConfig();
   clearTeacherError();
   await showTeacherDashboard();
   await loadTeacherProfileEditor();
@@ -1080,7 +1235,7 @@ function renderFocusHoursGrid() {
         return `
           <button class="focus-hour-chip booked ${variant === "paid" ? "paid" : "reserved"}" type="button" disabled>
             <strong>${time}</strong>
-            <span>${booking.studentName} • ${variant === "paid" ? "Paid / booked" : "Reserved"}</span>
+            <span>${booking.studentName} - ${variant === "paid" ? "Paid / booked" : "Reserved"}</span>
           </button>
         `;
       }
@@ -1148,6 +1303,10 @@ function renderBookings() {
   container.innerHTML = bookings
     .map((booking) => {
       const statusMeta = getBookingStatusMeta(booking.status);
+      const hasMeetingLink = hasText(teacherMeetingJoinLink) && statusMeta.active;
+      const meetingJoinState = hasMeetingLink
+        ? getTeacherMeetingJoinState(booking.date, booking.time)
+        : { enabled: false, label: "Join Meeting" };
       const paymentNote = statusMeta.value === "payment_submitted"
         ? '<p class="list-card-note">Student completed checkout. Verify the payment, then mark this lesson as paid.</p>'
         : statusMeta.canMarkPaid
@@ -1166,11 +1325,28 @@ function renderBookings() {
           <p class="list-card-note">${booking.message || "No booking note added."}</p>
           ${paymentNote}
             ${
-              statusMeta.canMarkPaid
+              statusMeta.canMarkPaid || hasMeetingLink
                 ? `<div class="list-card-actions">
-                  <button class="list-action pay booking-mark-paid" type="button" data-booking-id="${booking.id}">
-                    ${statusMeta.value === "payment_submitted" ? "Confirm Paid" : "Mark Paid"}
-                  </button>
+                  ${
+                    hasMeetingLink
+                      ? `<button
+                          class="list-action meet teacher-join-meeting"
+                          type="button"
+                          data-lesson-date="${booking.date}"
+                          data-lesson-time="${booking.time}"
+                          ${meetingJoinState.enabled ? "" : "disabled"}
+                        >
+                          ${meetingJoinState.label}
+                        </button>`
+                      : ""
+                  }
+                  ${
+                    statusMeta.canMarkPaid
+                      ? `<button class="list-action pay booking-mark-paid" type="button" data-booking-id="${booking.id}">
+                          ${statusMeta.value === "payment_submitted" ? "Confirm Paid" : "Mark Paid"}
+                        </button>`
+                      : ""
+                  }
                 </div>`
                 : ""
             }
@@ -1178,6 +1354,28 @@ function renderBookings() {
       `;
     })
     .join("");
+
+  container.querySelectorAll(".teacher-join-meeting").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!hasText(teacherMeetingJoinLink)) {
+        setDashboardActionError("Meeting link is not configured yet.");
+        return;
+      }
+
+      const date = String(button.getAttribute("data-lesson-date") || "");
+      const time = String(button.getAttribute("data-lesson-time") || "");
+      const state = getTeacherMeetingJoinState(date, time);
+      if (!state.enabled) {
+        setDashboardActionError(`Join button unlocks ${teacherMeetingEnableMinutesBefore} minutes before class.`);
+        return;
+      }
+
+      clearDashboardActionError();
+      window.open(teacherMeetingJoinLink, "_blank", "noopener,noreferrer");
+    });
+  });
+
+  updateTeacherMeetingButtons();
 
   container.querySelectorAll(".booking-mark-paid").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -1910,6 +2108,12 @@ function bindTeacherLogout() {
   button.addEventListener("click", async () => {
     currentTeacherUser = null;
     currentTeacherRole = "";
+    teacherMeetingJoinLink = "";
+    stopTeacherLiveSync();
+    if (teacherMeetingTickerId) {
+      window.clearInterval(teacherMeetingTickerId);
+      teacherMeetingTickerId = 0;
+    }
     if (window.supabaseClient) {
       await window.supabaseClient.auth.signOut();
     }
@@ -1919,6 +2123,7 @@ function bindTeacherLogout() {
 
 async function initAdminPortal() {
   window.HWFData.ensurePortalState();
+  startTeacherMeetingTicker();
   bindTeacherProfileEditor();
   bindTeacherAuth();
   bindTeacherInterestForm();

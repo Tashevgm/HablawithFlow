@@ -192,7 +192,7 @@ async function saveServerBookingIfAuthenticated({ studentName, email, date, time
     lesson_time: time,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London",
     message,
-    status: "pending_payment"
+    status: "confirmed_paid"
   });
 
   if (error) {

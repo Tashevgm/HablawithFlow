@@ -12,12 +12,43 @@ let studentProfileEditorBound = false;
 let studentSectionNavBound = false;
 let studentSetupModalBound = false;
 let activeStudentPortalSection = "book";
+let studentMeetingJoinLink = "";
+let studentMeetingEnableMinutesBefore = 15;
+let studentMeetingTickerId = 0;
 const TEACHER_PORTAL_ROLES = new Set(["teacher", "admin"]);
 const DEFAULT_PROFILE_AVATAR =
   "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80";
 
 function hasText(value) {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function normalizeIsoDateValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const prefixedDate = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (prefixedDate) {
+    return prefixedDate[1];
+  }
+
+  return raw;
+}
+
+function normalizeIsoTimeValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const timeMatch = raw.match(/^(\d{1,2}):(\d{2})/);
+  if (timeMatch) {
+    return `${pad(Number(timeMatch[1]))}:${timeMatch[2]}`;
+  }
+
+  return raw.slice(0, 5);
 }
 
 function getPasswordResetRedirect() {
@@ -88,6 +119,105 @@ function monthStart(dateString) {
 
 function shiftMonth(date, offset) {
   return new Date(date.getFullYear(), date.getMonth() + offset, 1);
+}
+
+function parseLessonStart(date, time) {
+  const parsed = new Date(`${date}T${time}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getMeetingJoinState(date, time) {
+  const start = parseLessonStart(date, time);
+  if (!start) {
+    return {
+      enabled: false,
+      label: "Join Meeting"
+    };
+  }
+
+  const now = new Date();
+  const enableAt = new Date(start.getTime() - studentMeetingEnableMinutesBefore * 60 * 1000);
+  const closeAt = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  const enabled = now >= enableAt && now <= closeAt;
+
+  if (enabled) {
+    return {
+      enabled: true,
+      label: "Join Meeting"
+    };
+  }
+
+  return {
+    enabled: false,
+    label: `Join in ${studentMeetingEnableMinutesBefore} min`
+  };
+}
+
+function updateStudentMeetingButtons() {
+  const buttons = document.querySelectorAll(".student-join-meeting");
+  if (!buttons.length) {
+    return;
+  }
+
+  buttons.forEach((button) => {
+    const date = String(button.getAttribute("data-lesson-date") || "");
+    const time = String(button.getAttribute("data-lesson-time") || "");
+    const state = getMeetingJoinState(date, time);
+    button.disabled = !state.enabled;
+    button.textContent = state.label;
+  });
+}
+
+function startStudentMeetingTicker() {
+  if (studentMeetingTickerId) {
+    window.clearInterval(studentMeetingTickerId);
+  }
+
+  studentMeetingTickerId = window.setInterval(() => {
+    updateStudentMeetingButtons();
+  }, 30000);
+}
+
+async function loadStudentMeetingJoinConfig() {
+  if (!window.supabaseClient) {
+    return;
+  }
+
+  const {
+    data: { session }
+  } = await window.supabaseClient.auth.getSession();
+  const accessToken = session?.access_token || "";
+  if (!accessToken) {
+    return;
+  }
+
+  const configuredApiBase =
+    window.HWF_APP_CONFIG && typeof window.HWF_APP_CONFIG.apiBase === "string"
+      ? window.HWF_APP_CONFIG.apiBase.trim()
+      : "";
+  const apiBase = configuredApiBase || window.location.origin;
+
+  try {
+    const response = await fetch(`${apiBase}/api/meeting/join-link`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = await response.json();
+    if (!payload || payload.ok !== true || !payload.configured || !hasText(payload.joinLink)) {
+      return;
+    }
+
+    studentMeetingJoinLink = String(payload.joinLink).trim();
+    studentMeetingEnableMinutesBefore = Math.max(1, Number(payload.enableMinutesBefore || 15));
+  } catch {
+    // Keep meeting link disabled when API fails.
+  }
 }
 
 function loadStoredReviews() {
@@ -200,6 +330,7 @@ async function openStudentDashboardFromSession() {
     currentStudent = null;
     currentSupabaseUserId = "";
     currentSupabaseUser = null;
+    studentMeetingJoinLink = "";
     await window.supabaseClient.auth.signOut();
     closeStudentSetupModal();
     document.getElementById("student-dashboard").hidden = true;
@@ -213,6 +344,7 @@ async function openStudentDashboardFromSession() {
   const profile = await loadSupabaseProfile(user);
   currentSupabaseUserId = user.id;
   currentSupabaseUser = user;
+  await loadStudentMeetingJoinConfig();
   await loadActiveServerBookingsForAvailability();
   const student = window.HWFData.ensureStudentFromProfile(profile);
   const hydratedStudent = await hydrateStudentFromServer(student);
@@ -246,6 +378,41 @@ async function listServerBookingsForCurrentStudent() {
 }
 
 async function loadActiveServerBookingsForAvailability() {
+  const {
+    data: { session }
+  } = await window.supabaseClient.auth.getSession();
+  const accessToken = session?.access_token || "";
+
+  const configuredApiBase =
+    window.HWF_APP_CONFIG && typeof window.HWF_APP_CONFIG.apiBase === "string"
+      ? window.HWF_APP_CONFIG.apiBase.trim()
+      : "";
+  const apiBase = configuredApiBase || window.location.origin;
+
+  if (hasText(accessToken)) {
+    try {
+      const response = await fetch(`${apiBase}/api/availability/blocked-slots`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      });
+
+      if (response.ok) {
+        const payload = await response.json();
+        if (payload && payload.ok === true && Array.isArray(payload.blockedSlots)) {
+          window.HWFServerBookings = payload.blockedSlots.map((slot) => ({
+            lesson_date: slot.date,
+            lesson_time: slot.time,
+            status: slot.status || "pending_payment"
+          }));
+          return true;
+        }
+      }
+    } catch {
+      // fallback to direct query below
+    }
+  }
+
   const activeStatuses = ["pending_payment", "payment_submitted", "confirmed_paid"];
   const { data, error } = await window.supabaseClient
     .from("bookings")
@@ -265,8 +432,8 @@ async function loadActiveServerBookingsForAvailability() {
 function isAvailabilityBlockedByBooking(date, time) {
   const bookings = Array.isArray(window.HWFServerBookings) ? window.HWFServerBookings : [];
   return bookings.some((booking) => {
-    const bookingDate = String(booking.lesson_date || booking.date || "");
-    const bookingTime = String(booking.lesson_time || booking.time || "").slice(0, 5);
+    const bookingDate = normalizeIsoDateValue(booking.lesson_date || booking.date || "");
+    const bookingTime = normalizeIsoTimeValue(booking.lesson_time || booking.time || "");
     const statusMeta = getBookingStatusMeta(booking.status);
     return bookingDate === date && bookingTime === time && statusMeta.active;
   });
@@ -291,8 +458,8 @@ async function hydrateStudentFromServer(student) {
         const isFreeFirstLesson = String(booking.id) === firstFreeLessonBookingId;
         return {
           id: booking.id,
-          date: booking.lesson_date,
-          time: booking.lesson_time.slice(0, 5),
+          date: normalizeIsoDateValue(booking.lesson_date),
+          time: normalizeIsoTimeValue(booking.lesson_time),
           topic: booking.lesson_type,
           status: isFreeFirstLesson ? "free_first_lesson" : statusMeta.value,
           statusLabel: isFreeFirstLesson ? "Free first lesson" : statusMeta.label,
@@ -317,6 +484,12 @@ async function saveServerBooking({ studentName, email, date, time, lessonType, m
   if (!currentSupabaseUserId) {
     return { ok: false, error: "You must be signed in to save a booking." };
   }
+
+  const existingStudentBookings = await listServerBookingsForCurrentStudent();
+  const hasActiveExistingBooking = existingStudentBookings.some((booking) => {
+    return getBookingStatusMeta(booking.status).active;
+  });
+  const isFreeFirstLessonBooking = Number(currentStudent?.completedLessons || 0) <= 0 && !hasActiveExistingBooking;
 
   const activeStatuses = ["pending_payment", "payment_submitted", "confirmed_paid"];
   const { data: existingAtTime, error: existingAtTimeError } = await window.supabaseClient
@@ -352,7 +525,7 @@ async function saveServerBooking({ studentName, email, date, time, lessonType, m
       lesson_time: time,
       timezone: currentStudent && currentStudent.timezone ? currentStudent.timezone : "Europe/London",
       message,
-      status: "pending_payment"
+      status: isFreeFirstLessonBooking ? "confirmed_paid" : "pending_payment"
     })
     .select()
     .single();
@@ -972,6 +1145,10 @@ function renderStudentDashboard(student) {
   } else {
     upcomingContainer.innerHTML = student.upcomingLessons
       .map((lesson) => {
+        const hasMeetingLink = hasText(studentMeetingJoinLink);
+        const meetingJoinState = hasMeetingLink
+          ? getMeetingJoinState(lesson.date, lesson.time)
+          : { enabled: false, label: "Join Meeting" };
         return `
           <article class="list-card">
             <div class="list-card-top">
@@ -980,8 +1157,21 @@ function renderStudentDashboard(student) {
             </div>
             <p>${formatStudentDate(lesson.date, lesson.time)} at ${lesson.time}</p>
             <p class="list-card-note ${lesson.canCancel || lesson.canPayNow ? "" : "warning"}">${lesson.statusNote}</p>
-            ${lesson.canCancel || lesson.canPayNow
+            ${lesson.canCancel || lesson.canPayNow || hasMeetingLink
               ? `<div class="list-card-actions">
+                  ${
+                    hasMeetingLink
+                      ? `<button
+                          class="list-action meet student-join-meeting"
+                          type="button"
+                          data-lesson-date="${lesson.date}"
+                          data-lesson-time="${lesson.time}"
+                          ${meetingJoinState.enabled ? "" : "disabled"}
+                        >
+                          ${meetingJoinState.label}
+                        </button>`
+                      : ""
+                  }
                   ${
                     lesson.canPayNow
                       ? `<button class="list-action pay student-pay-booking" type="button" data-booking-id="${lesson.id}">
@@ -1006,6 +1196,28 @@ function renderStudentDashboard(student) {
     upcomingContainer.onclick = async (event) => {
       const eventTarget = event.target instanceof Element ? event.target : null;
       if (!eventTarget) {
+        return;
+      }
+
+      const meetingButton = eventTarget.closest(".student-join-meeting");
+      if (meetingButton) {
+        if (!hasText(studentMeetingJoinLink)) {
+          setStudentBookingFeedback("Meeting link is not configured yet.", "error");
+          return;
+        }
+
+        const date = String(meetingButton.getAttribute("data-lesson-date") || "");
+        const time = String(meetingButton.getAttribute("data-lesson-time") || "");
+        const state = getMeetingJoinState(date, time);
+        if (!state.enabled) {
+          setStudentBookingFeedback(
+            `Join button unlocks ${studentMeetingEnableMinutesBefore} minutes before the lesson.`,
+            "error"
+          );
+          return;
+        }
+
+        window.open(studentMeetingJoinLink, "_blank", "noopener,noreferrer");
         return;
       }
 
@@ -1072,6 +1284,8 @@ function renderStudentDashboard(student) {
       const refreshedStudent = await hydrateStudentFromServer(currentStudent);
       renderStudentDashboard(refreshedStudent);
     };
+
+    updateStudentMeetingButtons();
   }
 
   document.getElementById("student-history").innerHTML = student.lessonHistory
@@ -1509,6 +1723,11 @@ function bindStudentLogin() {
     currentStudent = null;
     currentSupabaseUserId = "";
     currentSupabaseUser = null;
+    studentMeetingJoinLink = "";
+    if (studentMeetingTickerId) {
+      window.clearInterval(studentMeetingTickerId);
+      studentMeetingTickerId = 0;
+    }
     activeStudentPortalSection = "book";
     selectedStudentRating = 0;
     selectedStudentBookingDate = "";
@@ -1529,6 +1748,7 @@ function bindStudentLogin() {
 
 function initStudentPortal() {
   window.HWFData.ensurePortalState();
+  startStudentMeetingTicker();
   bindStudentSectionNav();
   bindStudentLogin();
   bindStudentProfileEditor();

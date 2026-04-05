@@ -1,10 +1,10 @@
-const isLiveServerLocal =
-  window.location.origin.includes("127.0.0.1:5500") ||
-  window.location.origin.includes("localhost:5500");
+const isLocalHost =
+  window.location.hostname === "127.0.0.1" ||
+  window.location.hostname === "localhost";
 
-const isLocalBackendOrigin =
-  window.location.origin.includes("127.0.0.1:8787") ||
-  window.location.origin.includes("localhost:8787");
+const isLiveServerLocal = isLocalHost && window.location.port !== "8787";
+
+const isLocalBackendOrigin = isLocalHost && window.location.port === "8787";
 
 const isHablawithflowPublicDomain =
   window.location.hostname === "hablawithflow.com" ||

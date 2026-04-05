@@ -1132,6 +1132,8 @@ app.get("/api", (request, response) => {
         <li><strong>Registration email:</strong> <code>POST /api/email/register</code></li>
         <li><strong>Booking email:</strong> <code>POST /api/email/booking</code></li>
         <li><strong>Payment pending email:</strong> <code>POST /api/email/payment-pending</code></li>
+        <li><strong>Meeting join link:</strong> <code>GET /api/meeting/join-link</code></li>
+        <li><strong>Blocked slots:</strong> <code>GET /api/availability/blocked-slots</code></li>
         <li><strong>Teacher bookings:</strong> <code>GET /api/teacher/bookings</code></li>
         <li><strong>Owner test email:</strong> <code>POST /api/owner/email-test</code></li>
         <li><strong>Owner reminder trigger:</strong> <code>POST /api/owner/booking-reminders/run</code></li>
@@ -1155,6 +1157,61 @@ app.get("/api/health", (request, response) => {
     },
     supabaseAdminConfigured: Boolean(supabaseAdmin)
   });
+});
+
+app.get("/api/meeting/join-link", async (request, response) => {
+  try {
+    const user = await requireAuthenticatedUser(request, response);
+    if (!user) {
+      return;
+    }
+
+    const configured = required(googleMeetLink);
+    response.json({
+      ok: true,
+      configured,
+      joinLink: configured ? googleMeetLink.trim() : "",
+      enableMinutesBefore: 15
+    });
+  } catch (error) {
+    console.error("Failed to resolve meeting join link", error);
+    jsonError(response, 500, "Failed to resolve meeting join link.");
+  }
+});
+
+app.get("/api/availability/blocked-slots", async (request, response) => {
+  try {
+    const user = await requireAuthenticatedUser(request, response);
+    if (!user) {
+      return;
+    }
+
+    const activeStatuses = ["pending_payment", "payment_submitted", "confirmed_paid"];
+    const { data, error } = await supabaseAdmin
+      .from("bookings")
+      .select("lesson_date, lesson_time, status")
+      .in("status", activeStatuses)
+      .order("lesson_date", { ascending: true })
+      .order("lesson_time", { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    response.json({
+      ok: true,
+      blockedSlots: Array.isArray(data)
+        ? data.map((row) => ({
+            date: String(row.lesson_date || "").trim(),
+            time: String(row.lesson_time || "").slice(0, 5),
+            status: String(row.status || "").trim().toLowerCase()
+          }))
+        : []
+    });
+  } catch (error) {
+    console.error("Failed to fetch blocked slots", error);
+    jsonError(response, 500, "Failed to fetch blocked slots.");
+  }
 });
 
 app.post("/api/teacher-invite/validate", (request, response) => {
@@ -1330,7 +1387,7 @@ app.post("/api/booking/confirm-email-complete", async (request, response) => {
         lesson_time: time,
         timezone,
         message,
-        status: "pending_payment"
+        status: "confirmed_paid"
       });
 
       if (insertBookingError) {

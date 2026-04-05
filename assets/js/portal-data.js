@@ -63,6 +63,34 @@ function normalizeTimeToHour(time) {
   return `${hours}:00`;
 }
 
+function normalizeIsoDateValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const prefixedDate = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (prefixedDate) {
+    return prefixedDate[1];
+  }
+
+  return raw;
+}
+
+function normalizeIsoTimeValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const timeMatch = raw.match(/^(\d{1,2}):(\d{2})/);
+  if (timeMatch) {
+    return `${String(Number(timeMatch[1])).padStart(2, "0")}:${timeMatch[2]}`;
+  }
+
+  return raw.slice(0, 5);
+}
+
 function parseSlotDateTime(date, time) {
   if (typeof date !== "string" || typeof time !== "string") {
     return null;
@@ -185,12 +213,14 @@ function getBookingStatusMeta(status) {
 }
 
 function normalizeBookingRecord(booking) {
-  const date = booking.date || booking.lesson_date || "";
+  const date = normalizeIsoDateValue(booking.date || booking.lesson_date || "");
   const rawTime = booking.time || booking.lesson_time || "";
+  const normalizedTime = normalizeIsoTimeValue(rawTime);
+
   return {
     ...booking,
     date,
-    time: typeof rawTime === "string" ? rawTime.slice(0, 5) : normalizeTimeToHour(rawTime),
+    time: normalizedTime || (typeof rawTime === "string" ? rawTime.slice(0, 5) : normalizeTimeToHour(rawTime)),
     studentName: booking.studentName || booking.student_name || "",
     lessonType: booking.lessonType || booking.lesson_type || "",
     message: booking.message || "",
