@@ -1699,12 +1699,17 @@ function bindStudentBookingSection() {
     const bookedLesson = refreshedStudent.upcomingLessons.find((lesson) => {
       return String(lesson.id) === String(serverResult.booking.id);
     });
+    const savedBookingStatus = getBookingStatusMeta(serverResult.booking.status).value;
+    const shouldSendConfirmedBookingEmail =
+      Boolean(bookedLesson && bookedLesson.isFreeFirstLesson) || savedBookingStatus === "confirmed_paid";
 
     let emailErrorMessage = "";
 
-    if (bookedLesson) {
+    if (!window.HWFEmailApi) {
+      emailErrorMessage = "Email service is not loaded on this page.";
+    } else {
       try {
-        if (bookedLesson.isFreeFirstLesson) {
+        if (shouldSendConfirmedBookingEmail) {
           await window.HWFEmailApi.sendBookingEmail({
             studentName: bookingPayload.studentName,
             email: bookingPayload.email,
@@ -1728,7 +1733,7 @@ function bindStudentBookingSection() {
     }
 
     const baseMessage =
-      bookedLesson && bookedLesson.isFreeFirstLesson
+      shouldSendConfirmedBookingEmail
         ? `Congratulations. Your free first lesson is booked for ${formatStudentDate(serverResult.booking.lesson_date, serverResult.booking.lesson_time)} at ${serverResult.booking.lesson_time.slice(0, 5)}.`
         : `Reserved for ${formatStudentDate(serverResult.booking.lesson_date, serverResult.booking.lesson_time)} at ${serverResult.booking.lesson_time.slice(0, 5)}. Please complete payment from your upcoming lessons (Pay Now).`;
 
