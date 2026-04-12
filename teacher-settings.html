@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teacher Dashboard | Hablawithflow</title>
+  <title>Teacher Settings | Hablawithflow</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -31,7 +31,7 @@
         <p class="teacher-sidebar-section-label">Menu</p>
 
         <nav class="teacher-sidebar-nav" aria-label="Teacher navigation links">
-          <a class="teacher-app-nav-link active" href="admin.html" aria-current="page">
+          <a class="teacher-app-nav-link" href="admin.html">
             <span class="teacher-nav-icon" aria-hidden="true">D</span>
             <span>Dashboard</span>
           </a>
@@ -55,7 +55,7 @@
             <span class="teacher-nav-icon" aria-hidden="true">P</span>
             <span>Profile</span>
           </a>
-          <a class="teacher-app-nav-link" href="teacher-settings.html">
+          <a class="teacher-app-nav-link active" href="teacher-settings.html" aria-current="page">
             <span class="teacher-nav-icon" aria-hidden="true">SE</span>
             <span>Settings</span>
           </a>
@@ -69,13 +69,13 @@
         </div>
         <button class="teacher-sidebar-edge-toggle" type="button" data-sidebar-toggle aria-controls="teacher-dashboard-sidebar" aria-expanded="false" aria-label="Fold sidebar">&lt;</button>
       </aside>
-      <button class="teacher-sidebar-backdrop" id="teacher-sidebar-backdrop" type="button" aria-label="Close navigation"></button>
+      <button class="teacher-sidebar-backdrop" id="teacher-sidebar-backdrop" type="button" aria-controls="teacher-dashboard-sidebar" aria-label="Close navigation"></button>
 
       <div class="teacher-dashboard-main">
         <header class="teacher-dashboard-topbar">
           <div>
-            <p class="teacher-topbar-kicker">Daily Overview</p>
-            <h1 class="teacher-topbar-title">Teacher Dashboard</h1>
+            <p class="teacher-topbar-kicker">Preferences</p>
+            <h1 class="teacher-topbar-title">Settings</h1>
           </div>
           <div class="teacher-topbar-tools">
             <span class="teacher-date-chip" id="teacher-dashboard-date">Date</span>
@@ -89,68 +89,92 @@
           </div>
         </header>
 
-        <div class="form-error teacher-dashboard-error" id="slot-error" hidden></div>
-
-        <section class="teacher-page-hero-card">
-          <div class="teacher-page-hero-copy">
-            <span class="teacher-page-eyebrow">Simple Main Page</span>
-            <h2 id="teacher-home-greeting-title">Buenas tardes, Teacher.</h2>
-            <p id="teacher-home-greeting-subtitle">
-              Your most important teaching information lives here: next lessons, calendar visibility, and follow-ups.
-            </p>
-          </div>
-          <div class="teacher-home-stat-grid">
-            <article class="teacher-home-stat-card">
-              <span>Today</span>
-              <strong id="teacher-home-stat-today">0</strong>
-              <small>Lessons left today</small>
-            </article>
-            <article class="teacher-home-stat-card">
-              <span>Upcoming</span>
-              <strong id="teacher-home-stat-bookings">0</strong>
-              <small>Confirmed upcoming lessons</small>
-            </article>
-            <article class="teacher-home-stat-card">
-              <span>Students</span>
-              <strong id="teacher-home-stat-students">0</strong>
-              <small>Active learners</small>
-            </article>
-            <article class="teacher-home-stat-card">
-              <span>Open Slots</span>
-              <strong id="teacher-home-stat-open-slots">0</strong>
-              <small>Available times to book</small>
-            </article>
-            <article class="teacher-home-stat-card accent">
-              <span>Pending</span>
-              <strong id="teacher-home-stat-pending">0</strong>
-              <small>Payments needing review</small>
-            </article>
-          </div>
-        </section>
-
-        <section class="teacher-home-layout">
+        <section class="teacher-home-layout teacher-home-layout-bottom">
           <article class="teacher-panel teacher-panel-large">
             <div class="teacher-panel-heading">
               <div>
-                <span class="section-kicker">Calendar</span>
-                <h3>Today's schedule</h3>
+                <span class="section-kicker">Portal Settings</span>
+                <h3>Adjust how your portal works</h3>
               </div>
-              <a class="btn-outline" href="teacher-calendar.html">Open calendar</a>
             </div>
-            <div class="teacher-week-preview-grid" id="teacher-week-preview-grid"></div>
+
+            <div class="teacher-form-grid teacher-form-grid-two">
+              <div class="form-group">
+                <label for="teacher-settings-timezone">Default timezone</label>
+                <input type="text" id="teacher-settings-timezone" placeholder="Europe/London">
+              </div>
+              <div class="form-group">
+                <label for="teacher-settings-provider">Meeting provider</label>
+                <input type="text" id="teacher-settings-provider" readonly>
+              </div>
+            </div>
+
+            <div class="teacher-form-grid teacher-form-grid-two">
+              <div class="form-group">
+                <label for="teacher-settings-join-window">Join button opens</label>
+                <input type="text" id="teacher-settings-join-window" readonly>
+              </div>
+              <div class="form-group">
+                <label for="teacher-settings-sidebar-mode">Sidebar preference</label>
+                <select id="teacher-settings-sidebar-mode">
+                  <option value="open">Keep it open</option>
+                  <option value="collapsed">Prefer collapsed on desktop</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="settings-toggle-grid">
+              <label class="settings-toggle-card">
+                <input type="checkbox" id="teacher-settings-weekly-summary">
+                <span>Weekly summary reminder</span>
+                <small>Keep a personal reminder in your settings for weekly teaching review.</small>
+              </label>
+              <label class="settings-toggle-card">
+                <input type="checkbox" id="teacher-settings-before-lesson">
+                <span>Before-lesson checklist</span>
+                <small>Store your personal pre-class checklist in the portal.</small>
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label for="teacher-settings-default-note">Default lesson prep note</label>
+              <textarea id="teacher-settings-default-note" placeholder="Example: Check the student's last homework, hobbies, and learning goal before the lesson."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="teacher-settings-focus-reminder">Personal focus reminder</label>
+              <textarea id="teacher-settings-focus-reminder" placeholder="Example: Keep lessons practical, personal, and conversation-driven."></textarea>
+            </div>
+
+            <div class="teacher-profile-actions">
+              <button class="btn-submit" id="teacher-settings-save" type="button">Save Settings</button>
+              <div id="teacher-settings-feedback" class="booking-feedback" hidden></div>
+            </div>
           </article>
 
           <article class="teacher-panel teacher-panel-narrow">
             <div class="teacher-panel-heading">
               <div>
-                <span class="section-kicker">Next Lessons</span>
-                <h3>What is coming up</h3>
+                <span class="section-kicker">Suggested Settings</span>
+                <h3>Recommended setup</h3>
               </div>
             </div>
-            <div class="teacher-upnext-list" id="teacher-home-up-next-list"></div>
+            <div class="teacher-wallet-note-list">
+              <article class="teacher-wallet-note-item">
+                <strong>Timezone</strong>
+                <p>Set it correctly so your calendar, messages, and lessons stay consistent.</p>
+              </article>
+              <article class="teacher-wallet-note-item">
+                <strong>Prep note</strong>
+                <p>Use the default note to remind yourself to review hobbies, occupation, and learning goals before class.</p>
+              </article>
+              <article class="teacher-wallet-note-item">
+                <strong>Sidebar mode</strong>
+                <p>If you mainly teach from a laptop, keep it open. If you use a tablet, collapsed works better.</p>
+              </article>
+            </div>
           </article>
         </section>
-
       </div>
     </div>
   </main>

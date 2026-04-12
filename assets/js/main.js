@@ -203,7 +203,7 @@ async function saveServerBookingIfAuthenticated({ studentName, email, date, time
 }
 
 function isSlotStillAvailable(date, time) {
-  return window.HWFData.listAvailability().some((slot) => slot.date === date && slot.time === time);
+  return window.HWFData.listBookableAvailability().some((slot) => slot.date === date && slot.time === time);
 }
 
 function getInitials(name) {
@@ -364,7 +364,7 @@ function prefillBookingFormFromQuery() {
 }
 
 function getAvailability() {
-  return window.HWFData.listAvailability();
+  return window.HWFData.listBookableAvailability();
 }
 
 function uniqueDates(slots) {
@@ -446,7 +446,7 @@ function updateBookingSelectionUI() {
   timeInput.value = selectedBookingTime;
 
   if (!dates.length) {
-    selection.textContent = "No lesson slots are open right now.";
+    selection.textContent = "No 1-hour lesson starts are open right now.";
     trigger.textContent = "No availability yet";
     trigger.disabled = true;
     return;
@@ -456,9 +456,9 @@ function updateBookingSelectionUI() {
   trigger.textContent = "Pick a slot";
 
   if (!selectedBookingDate || !selectedBookingTime) {
-    selection.textContent = "Choose a highlighted date and time from the availability calendar.";
+    selection.textContent = "Choose a highlighted date and start time for your 1-hour lesson.";
   } else {
-    selection.textContent = `Selected: ${formatDateLong(selectedBookingDate)} at ${selectedBookingTime}.`;
+    selection.textContent = `Selected: ${formatDateLong(selectedBookingDate)} at ${selectedBookingTime} for a 1-hour lesson.`;
   }
 }
 
@@ -500,7 +500,7 @@ function renderBookingMonth() {
         ${isAvailable ? "" : "disabled"}
         >
           <strong>${day}</strong>
-          <span>${isAvailable ? `${times.length} slot${times.length === 1 ? "" : "s"}` : "No slots"}</span>
+          <span>${isAvailable ? `${times.length} start time${times.length === 1 ? "" : "s"}` : "No starts"}</span>
         </button>
       `;
     }
@@ -531,7 +531,7 @@ function renderBookingTimes() {
   }
 
   const times = getTimesForDate(selectedBookingDate);
-  caption.textContent = `${formatDateLong(selectedBookingDate)} has ${times.length} available time${times.length === 1 ? "" : "s"}.`;
+  caption.textContent = `${formatDateLong(selectedBookingDate)} has ${times.length} available 1-hour start time${times.length === 1 ? "" : "s"}.`;
 
   if (!times.length) {
     container.innerHTML = '<p class="booking-empty-state">No open times remain on that day.</p>';

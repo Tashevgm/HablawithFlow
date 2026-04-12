@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const crypto = require("crypto");
+const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
@@ -9,6 +10,7 @@ const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 const projectRoot = __dirname;
+const localMessagingStorePath = path.join(projectRoot, ".local-messaging-store.json");
 const port = Number(process.env.PORT || 8787);
 const resendApiKey = process.env.RESEND_API_KEY;
 const emailFrom = process.env.EMAIL_FROM || "Hablawithflow <onboarding@resend.dev>";
@@ -48,6 +50,7 @@ const supabaseConfigLooksPlaceholder = (value) => {
 const hasValidSupabaseAdminConfig =
   !supabaseConfigLooksPlaceholder(supabaseUrl) &&
   !supabaseConfigLooksPlaceholder(supabaseServiceRoleKey);
+let messagingStorageMode = "unknown";
 
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 const supabaseAdmin =
@@ -2092,12 +2095,18 @@ app.get("/api/teacher/students", async (request, response) => {
     const teacherUserId = String(teacherUser.id || "").trim();
     const teacherEmail = String(teacherUser.email || "").trim().toLowerCase();
 
-    const [{ data: profileRows, error: profileError }, authUsers, { data: bookingRows, error: bookingError }] = await Promise.all([
-      supabaseAdmin.from("profiles").select("id, role, full_name, level, track, goal, notes"),
+    const [
+      { data: profileRows, error: profileError },
+      authUsers,
+      { data: bookingRows, error: bookingError },
+      { data: communityProfileRows, error: communityProfileError }
+    ] = await Promise.all([
+      supabaseAdmin.from("profiles").select("id, role, full_name, level, track, goal, notes, timezone"),
       listAuthUsers(10),
       supabaseAdmin
         .from("bookings")
-        .select("student_id, student_email, student_name")
+        .select("student_id, student_email, student_name"),
+      supabaseAdmin.from("community_profiles").select("id, languages")
     ]);
 
     if (profileError) {
@@ -2106,15 +2115,38 @@ app.get("/api/teacher/students", async (request, response) => {
     if (bookingError) {
       throw bookingError;
     }
+    const shouldIgnoreCommunityProfilesError =
+      communityProfileError && String(communityProfileError.message || "").toLowerCase().includes("community_profiles");
+    const communityProfiles = shouldIgnoreCommunityProfilesError ? [] : communityProfileRows || [];
+
+    if (communityProfileError && !shouldIgnoreCommunityProfilesError) {
+      throw communityProfileError;
+    }
 
     const authUserById = new Map(authUsers.map((user) => [user.id, user]));
     const profileById = new Map((profileRows || []).map((profile) => [String(profile.id || "").trim(), profile]));
+    const communityProfileById = new Map(
+      communityProfiles.map((profile) => [String(profile.id || "").trim(), profile])
+    );
     const authUserByEmail = new Map(
       authUsers
         .filter((user) => required(user?.email))
         .map((user) => [String(user.email || "").trim().toLowerCase(), user])
     );
     const normalizedOwnerEmail = required(ownerEmail) ? ownerEmail.trim().toLowerCase() : "";
+
+    function normalizeLanguageList(value) {
+      if (Array.isArray(value)) {
+        return value
+          .map((entry) => String(entry || "").trim())
+          .filter(Boolean);
+      }
+
+      return String(value || "")
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    }
 
     function shouldSkipStudent({ id, email, authUser, profile }) {
       const normalizedId = String(id || "").trim();
@@ -2141,6 +2173,20 @@ app.get("/api/teacher/students", async (request, response) => {
       const normalizedId = String(id || "").trim();
       const normalizedEmail = String(email || "").trim().toLowerCase();
       const metadataName = String(authUser?.user_metadata?.full_name || "").trim();
+      const metadata = authUser?.user_metadata || {};
+      const communityProfile = required(normalizedId) ? communityProfileById.get(normalizedId) : null;
+      const languagesFromCommunityProfile = normalizeLanguageList(communityProfile?.languages);
+      const languages = languagesFromCommunityProfile.length
+        ? languagesFromCommunityProfile
+        : normalizeLanguageList(metadata.community_languages);
+      const personalization = {
+        learning_goal: String(metadata.student_learning_goal || metadata.goal || profile?.goal || "").trim() || null,
+        occupation: String(metadata.student_occupation || "").trim() || null,
+        hobbies: String(metadata.student_hobbies || "").trim() || null,
+        interests: String(metadata.student_interests || "").trim() || null,
+        personality_notes: String(metadata.student_personality_notes || "").trim() || null
+      };
+      const hasPersonalization = Object.values(personalization).some((value) => required(String(value || "")));
       const preferredName = String(profile?.full_name || metadataName || bookingName || normalizedEmail.split("@")[0] || "Student").trim();
       const studentId = required(normalizedId) ? normalizedId : normalizedEmail;
 
@@ -2151,8 +2197,11 @@ app.get("/api/teacher/students", async (request, response) => {
         full_name: preferredName,
         level: profile?.level || "Beginner",
         track: profile?.track || "1-on-1",
-        goal: profile?.goal || "Conversation",
-        notes: profile?.notes || ""
+        timezone: String(profile?.timezone || metadata.timezone || "").trim(),
+        languages,
+        personalization: hasPersonalization ? personalization : null,
+        goal: profile?.goal || personalization.learning_goal || "Conversation",
+        notes: profile?.notes || String(metadata.notes || "").trim()
       };
     }
 
@@ -2731,6 +2780,869 @@ app.post("/api/email/teacher-interest", async (request, response) => {
   } catch (error) {
     console.error("Failed to send teacher interest email", error);
     jsonError(response, 500, publicErrorMessage("Failed to send teacher interest email.", error));
+  }
+});
+
+// ================================
+// MESSAGING API ENDPOINTS
+// ================================
+
+function getMessagingRoleLabel(role) {
+  const normalizedRole = String(role || "").trim().toLowerCase();
+
+  if (normalizedRole === "admin") {
+    return "Portal Admin";
+  }
+
+  if (normalizedRole === "teacher") {
+    return "Spanish Teacher";
+  }
+
+  if (normalizedRole === "student") {
+    return "Student";
+  }
+
+  return "Conversation";
+}
+
+function buildMessagingParticipantSummary({ userId, authUser, profile, teacherProfile }) {
+  const normalizedUserId = String(userId || "").trim();
+  const metadata = authUser?.user_metadata && typeof authUser.user_metadata === "object" ? authUser.user_metadata : {};
+  const teacherDetails =
+    metadata.teacher_profile_details && typeof metadata.teacher_profile_details === "object"
+      ? metadata.teacher_profile_details
+      : {};
+  const email = String(authUser?.email || "").trim().toLowerCase();
+  const rawRole = String(profile?.role || metadata.role || "").trim().toLowerCase();
+  const role = TEACHER_ROLES.has(rawRole) || teacherProfile ? rawRole || "teacher" : rawRole || "student";
+  const name =
+    String(profile?.full_name || metadata.full_name || metadata.name || email.split("@")[0] || "Conversation").trim() ||
+    "Conversation";
+  const track = String(profile?.track || metadata.track || "").trim();
+  const level = String(profile?.level || metadata.level || "").trim();
+  const subtitle =
+    role === "student"
+      ? [track, level].filter(Boolean).join(" • ") || track || level || "Student conversation"
+      : String(teacherDetails.headline || "").trim() || getMessagingRoleLabel(role);
+
+  return {
+    id: normalizedUserId,
+    email,
+    name,
+    role,
+    subtitle,
+    avatar: name.charAt(0).toUpperCase() || "C",
+    avatarUrl: String(metadata.avatar_url || "").trim(),
+    timezone: String(profile?.timezone || teacherProfile?.timezone || metadata.timezone || "").trim()
+  };
+}
+
+async function getMessagingDirectoryContext() {
+  const authUsers = await (async () => {
+    try {
+      return await listAuthUsers(10);
+    } catch (error) {
+      console.warn("Messaging directory auth lookup unavailable", error);
+      return [];
+    }
+  })();
+
+  const [profileResult, teacherProfileResult] = await Promise.all([
+    supabaseAdmin.from("profiles").select("id, role, full_name, level, track, timezone"),
+    supabaseAdmin.from("teacher_profiles").select("id, timezone, bio")
+  ]);
+
+  const profileRows = Array.isArray(profileResult?.data) ? profileResult.data : [];
+  const profileError = profileResult?.error || null;
+  let teacherProfileRows = Array.isArray(teacherProfileResult?.data) ? teacherProfileResult.data : [];
+  const teacherProfileError = teacherProfileResult?.error || null;
+
+  if (profileError) {
+    throw profileError;
+  }
+
+  if (teacherProfileError) {
+    if (isMissingSupabaseTableError(teacherProfileError, "teacher_profiles")) {
+      console.warn("Messaging directory teacher_profiles lookup unavailable", teacherProfileError);
+      teacherProfileRows = [];
+    } else {
+      throw teacherProfileError;
+    }
+  }
+
+  return {
+    profileById: new Map((profileRows || []).map((profile) => [String(profile.id || "").trim(), profile])),
+    teacherProfileById: new Map((teacherProfileRows || []).map((profile) => [String(profile.id || "").trim(), profile])),
+    authUserById: new Map((authUsers || []).map((authUser) => [String(authUser.id || "").trim(), authUser]))
+  };
+}
+
+function getMessagingParticipantSummaryById(userId, directoryContext) {
+  const normalizedUserId = String(userId || "").trim();
+
+  return buildMessagingParticipantSummary({
+    userId: normalizedUserId,
+    authUser: directoryContext.authUserById.get(normalizedUserId) || null,
+    profile: directoryContext.profileById.get(normalizedUserId) || null,
+    teacherProfile: directoryContext.teacherProfileById.get(normalizedUserId) || null
+  });
+}
+
+function getDefaultMessagingTeacherId(currentUserId, directoryContext) {
+  const candidateIds = new Set();
+
+  directoryContext.teacherProfileById.forEach((_, id) => {
+    if (id && id !== currentUserId) {
+      candidateIds.add(id);
+    }
+  });
+
+  directoryContext.profileById.forEach((profile, id) => {
+    const role = String(profile?.role || "").trim().toLowerCase();
+    if (id && id !== currentUserId && TEACHER_ROLES.has(role)) {
+      candidateIds.add(id);
+    }
+  });
+
+  directoryContext.authUserById.forEach((authUser, id) => {
+    const metadataRole = String(authUser?.user_metadata?.role || "").trim().toLowerCase();
+    if (id && id !== currentUserId && TEACHER_ROLES.has(metadataRole)) {
+      candidateIds.add(id);
+    }
+  });
+
+  const candidates = Array.from(candidateIds).map((id) => getMessagingParticipantSummaryById(id, directoryContext));
+  candidates.sort((left, right) => {
+    const leftPriority = left.role === "teacher" ? 0 : left.role === "admin" ? 1 : 2;
+    const rightPriority = right.role === "teacher" ? 0 : right.role === "admin" ? 1 : 2;
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    return left.name.localeCompare(right.name);
+  });
+
+  return candidates.length ? String(candidates[0].id || "").trim() : "";
+}
+
+function isMissingSupabaseTableError(error, tableName) {
+  const normalizedTableName = String(tableName || "").trim().toLowerCase().replace(/^public\./, "");
+  const qualifiedTableName = normalizedTableName ? `public.${normalizedTableName}` : "";
+  const code = String(error?.code || "").trim().toUpperCase();
+  const message = String(error?.message || "").trim().toLowerCase();
+
+  if (code === "PGRST205") {
+    if (!qualifiedTableName) {
+      return true;
+    }
+
+    return message.includes(qualifiedTableName) || message.includes(normalizedTableName);
+  }
+
+  return Boolean(qualifiedTableName && message.includes(qualifiedTableName) && message.includes("schema cache"));
+}
+
+function isMissingMessagingSchemaError(error) {
+  return isMissingSupabaseTableError(error, "conversations");
+}
+
+async function hasSupabaseMessagingTables() {
+  if (!supabaseAdmin) {
+    messagingStorageMode = "local";
+    return false;
+  }
+
+  if (messagingStorageMode === "supabase") {
+    return true;
+  }
+
+  if (messagingStorageMode === "local") {
+    return false;
+  }
+
+  const { error } = await supabaseAdmin.from("conversations").select("id").limit(1);
+  if (!error) {
+    messagingStorageMode = "supabase";
+    return true;
+  }
+
+  if (isMissingMessagingSchemaError(error)) {
+    messagingStorageMode = "local";
+    console.warn("Messaging tables are missing in Supabase. Falling back to local messaging store.");
+    return false;
+  }
+
+  throw error;
+}
+
+function createEmptyLocalMessagingStore() {
+  return {
+    conversations: [],
+    messages: [],
+    readStatus: []
+  };
+}
+
+function readLocalMessagingStore() {
+  try {
+    if (!fs.existsSync(localMessagingStorePath)) {
+      return createEmptyLocalMessagingStore();
+    }
+
+    const raw = fs.readFileSync(localMessagingStorePath, "utf8");
+    const parsed = JSON.parse(raw);
+    return {
+      conversations: Array.isArray(parsed?.conversations) ? parsed.conversations : [],
+      messages: Array.isArray(parsed?.messages) ? parsed.messages : [],
+      readStatus: Array.isArray(parsed?.readStatus) ? parsed.readStatus : []
+    };
+  } catch (error) {
+    console.error("Failed to read local messaging store", error);
+    return createEmptyLocalMessagingStore();
+  }
+}
+
+function writeLocalMessagingStore(store) {
+  fs.writeFileSync(localMessagingStorePath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+}
+
+function sortLocalConversationsByActivity(conversations) {
+  return [...conversations].sort((left, right) => {
+    const leftTimestamp = new Date(left?.last_message_at || left?.created_at || 0).getTime();
+    const rightTimestamp = new Date(right?.last_message_at || right?.created_at || 0).getTime();
+    return rightTimestamp - leftTimestamp;
+  });
+}
+
+function buildLocalMessageReadStatus(messageId, store) {
+  return store.readStatus
+    .filter((status) => String(status?.message_id || "") === String(messageId || ""))
+    .map((status) => ({
+      reader_id: String(status?.reader_id || "").trim(),
+      read_at: status?.read_at || null
+    }));
+}
+
+function listLocalConversationsForUser(userId) {
+  const store = readLocalMessagingStore();
+  const normalizedUserId = String(userId || "").trim();
+
+  return sortLocalConversationsByActivity(
+    store.conversations.filter((conversation) => {
+      return conversation.student_id === normalizedUserId || conversation.teacher_id === normalizedUserId;
+    })
+  );
+}
+
+function getLocalConversationById(conversationId) {
+  const store = readLocalMessagingStore();
+  return (
+    store.conversations.find((conversation) => String(conversation?.id || "") === String(conversationId || "")) || null
+  );
+}
+
+function getLocalMessageById(messageId) {
+  const store = readLocalMessagingStore();
+  return store.messages.find((message) => String(message?.id || "") === String(messageId || "")) || null;
+}
+
+function listLocalMessagesForConversation(conversationId) {
+  const store = readLocalMessagingStore();
+
+  return store.messages
+    .filter((message) => {
+      return String(message?.conversation_id || "") === String(conversationId || "") && !message?.deleted_at;
+    })
+    .sort((left, right) => {
+      const leftTimestamp = new Date(left?.created_at || 0).getTime();
+      const rightTimestamp = new Date(right?.created_at || 0).getTime();
+      return leftTimestamp - rightTimestamp;
+    })
+    .map((message) => ({
+      ...message,
+      message_read_status: buildLocalMessageReadStatus(message.id, store)
+    }));
+}
+
+function getLatestLocalStudentConversation(studentId) {
+  const store = readLocalMessagingStore();
+  const normalizedStudentId = String(studentId || "").trim();
+
+  return sortLocalConversationsByActivity(
+    store.conversations.filter((conversation) => conversation.student_id === normalizedStudentId)
+  )[0] || null;
+}
+
+function getOrCreateLocalDirectConversation({ studentId, teacherId, lessonId = null }) {
+  const store = readLocalMessagingStore();
+  const normalizedStudentId = String(studentId || "").trim();
+  const normalizedTeacherId = String(teacherId || "").trim();
+  const existingConversation =
+    store.conversations.find((conversation) => {
+      return conversation.student_id === normalizedStudentId && conversation.teacher_id === normalizedTeacherId;
+    }) || null;
+
+  if (existingConversation) {
+    return {
+      conversation: existingConversation,
+      created: false
+    };
+  }
+
+  const timestamp = new Date().toISOString();
+  const conversation = {
+    id: crypto.randomUUID(),
+    student_id: normalizedStudentId,
+    teacher_id: normalizedTeacherId,
+    lesson_id: lessonId || null,
+    subject: null,
+    last_message_at: timestamp,
+    student_archived: false,
+    teacher_archived: false,
+    created_at: timestamp,
+    updated_at: timestamp
+  };
+
+  store.conversations.push(conversation);
+  writeLocalMessagingStore(store);
+
+  return {
+    conversation,
+    created: true
+  };
+}
+
+function createLocalMessage({ conversationId, senderId, senderType, body }) {
+  const store = readLocalMessagingStore();
+  const timestamp = new Date().toISOString();
+  const message = {
+    id: crypto.randomUUID(),
+    conversation_id: String(conversationId || "").trim(),
+    sender_id: String(senderId || "").trim(),
+    sender_type: String(senderType || "student").trim(),
+    body: String(body || "").trim(),
+    created_at: timestamp,
+    deleted_at: null,
+    updated_at: timestamp
+  };
+
+  store.messages.push(message);
+
+  const conversation =
+    store.conversations.find((entry) => String(entry?.id || "") === String(conversationId || "")) || null;
+  if (conversation) {
+    conversation.last_message_at = timestamp;
+    conversation.updated_at = timestamp;
+  }
+
+  writeLocalMessagingStore(store);
+  return message;
+}
+
+function markLocalMessageRead({ messageId, readerId }) {
+  const store = readLocalMessagingStore();
+  const normalizedMessageId = String(messageId || "").trim();
+  const normalizedReaderId = String(readerId || "").trim();
+  const timestamp = new Date().toISOString();
+  const existingStatus =
+    store.readStatus.find((status) => {
+      return status.message_id === normalizedMessageId && status.reader_id === normalizedReaderId;
+    }) || null;
+
+  if (existingStatus) {
+    existingStatus.read_at = timestamp;
+  } else {
+    store.readStatus.push({
+      id: crypto.randomUUID(),
+      message_id: normalizedMessageId,
+      reader_id: normalizedReaderId,
+      read_at: timestamp,
+      created_at: timestamp
+    });
+  }
+
+  writeLocalMessagingStore(store);
+}
+
+async function getOrCreateDirectConversation({ studentId, teacherId, lessonId = null }) {
+  if (!(await hasSupabaseMessagingTables())) {
+    return getOrCreateLocalDirectConversation({ studentId, teacherId, lessonId });
+  }
+
+  const normalizedStudentId = String(studentId || "").trim();
+  const normalizedTeacherId = String(teacherId || "").trim();
+  const { data: existingConversation, error: existingError } = await supabaseAdmin
+    .from("conversations")
+    .select("*")
+    .eq("student_id", normalizedStudentId)
+    .eq("teacher_id", normalizedTeacherId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if (existingConversation) {
+    return {
+      conversation: existingConversation,
+      created: false
+    };
+  }
+
+  const { data: createdConversation, error: createError } = await supabaseAdmin
+    .from("conversations")
+    .insert({
+      student_id: normalizedStudentId,
+      teacher_id: normalizedTeacherId,
+      lesson_id: lessonId || null
+    })
+    .select("*")
+    .single();
+
+  if (!createError) {
+    return {
+      conversation: createdConversation,
+      created: true
+    };
+  }
+
+  const createErrorMessage = String(createError.message || "").trim().toLowerCase();
+  if (!createErrorMessage.includes("duplicate") && !createErrorMessage.includes("conversations_student_id_teacher_id_key")) {
+    throw createError;
+  }
+
+  const { data: fallbackConversation, error: fallbackError } = await supabaseAdmin
+    .from("conversations")
+    .select("*")
+    .eq("student_id", normalizedStudentId)
+    .eq("teacher_id", normalizedTeacherId)
+    .maybeSingle();
+
+  if (fallbackError) {
+    throw fallbackError;
+  }
+
+  return {
+    conversation: fallbackConversation,
+    created: false
+  };
+}
+
+// Get user's conversations
+app.get("/api/messages/conversations", async (request, response) => {
+  try {
+    const user = await requireAuthenticatedUser(request, response);
+    if (!user) {
+      return;
+    }
+
+    const userId = String(user.id || "").trim();
+
+    if (!(await hasSupabaseMessagingTables())) {
+      return response.json({
+        ok: true,
+        conversations: listLocalConversationsForUser(userId)
+      });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("conversations")
+      .select("*, messages:messages(count)")
+      .or(`student_id.eq.${userId},teacher_id.eq.${userId}`)
+      .order("last_message_at", { ascending: false });
+
+    if (error) throw error;
+
+    response.json({
+      ok: true,
+      conversations: data || []
+    });
+  } catch (error) {
+    console.error("Error fetching conversations", error);
+    jsonError(response, 500, publicErrorMessage("Failed to fetch conversations.", error));
+  }
+});
+
+// Get messages in a conversation
+app.get("/api/messages/conversations/:conversationId", async (request, response) => {
+  const { conversationId } = request.params;
+
+  try {
+    const user = await requireAuthenticatedUser(request, response);
+    if (!user) {
+      return;
+    }
+
+    if (!(await hasSupabaseMessagingTables())) {
+      const conversation = getLocalConversationById(conversationId);
+      if (!conversation) {
+        return jsonError(response, 404, "Conversation not found");
+      }
+
+      if (conversation.student_id !== user.id && conversation.teacher_id !== user.id) {
+        return jsonError(response, 403, "Forbidden");
+      }
+
+      return response.json({
+        ok: true,
+        conversation,
+        messages: listLocalMessagesForConversation(conversationId)
+      });
+    }
+
+    // Verify user has access to this conversation
+    const { data: conv, error: convError } = await supabaseAdmin
+      .from("conversations")
+      .select("*")
+      .eq("id", conversationId)
+      .single();
+
+    if (convError || !conv) {
+      return jsonError(response, 404, "Conversation not found");
+    }
+
+    if (conv.student_id !== user.id && conv.teacher_id !== user.id) {
+      return jsonError(response, 403, "Forbidden");
+    }
+
+    // Get messages
+    const { data: messages, error: messagesError } = await supabaseAdmin
+      .from("messages")
+      .select("*, message_read_status(reader_id, read_at)")
+      .eq("conversation_id", conversationId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true });
+
+    if (messagesError) throw messagesError;
+
+    response.json({
+      ok: true,
+      conversation: conv,
+      messages: messages || []
+    });
+  } catch (error) {
+    console.error("Error fetching conversation messages", error);
+    jsonError(response, 500, publicErrorMessage("Failed to fetch messages.", error));
+  }
+});
+
+// Send a message
+app.post("/api/messages/send", async (request, response) => {
+  const { conversationId, body } = request.body || {};
+
+  if (!conversationId || !body || typeof body !== "string" || body.trim().length === 0) {
+    return jsonError(response, 400, "Missing or invalid conversationId or message body");
+  }
+
+  try {
+    const user = await requireAuthenticatedUser(request, response);
+    if (!user) {
+      return;
+    }
+
+    if (!(await hasSupabaseMessagingTables())) {
+      const conversation = getLocalConversationById(conversationId);
+      if (!conversation) {
+        return jsonError(response, 404, "Conversation not found");
+      }
+
+      if (conversation.student_id !== user.id && conversation.teacher_id !== user.id) {
+        return jsonError(response, 403, "Forbidden");
+      }
+
+      const senderType = conversation.student_id === user.id ? "student" : "teacher";
+      const newMessage = createLocalMessage({
+        conversationId,
+        senderId: user.id,
+        senderType,
+        body
+      });
+
+      return response.json({
+        ok: true,
+        message: {
+          ...newMessage,
+          message_read_status: []
+        }
+      });
+    }
+
+    // Verify user has access to conversation
+    const { data: conv, error: convError } = await supabaseAdmin
+      .from("conversations")
+      .select("*")
+      .eq("id", conversationId)
+      .single();
+
+    if (convError || !conv) {
+      return jsonError(response, 404, "Conversation not found");
+    }
+
+    if (conv.student_id !== user.id && conv.teacher_id !== user.id) {
+      return jsonError(response, 403, "Forbidden");
+    }
+
+    // Determine sender type
+    const senderType = conv.student_id === user.id ? "student" : "teacher";
+
+    // Insert message
+    const { data: newMessage, error: insertError } = await supabaseAdmin
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        sender_type: senderType,
+        body: body.trim()
+      })
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+
+    // Update conversation's last_message_at
+    await supabaseAdmin
+      .from("conversations")
+      .update({ last_message_at: new Date().toISOString() })
+      .eq("id", conversationId);
+
+    response.json({
+      ok: true,
+      message: newMessage
+    });
+  } catch (error) {
+    console.error("Error sending message", error);
+    jsonError(response, 500, publicErrorMessage("Failed to send message.", error));
+  }
+});
+
+// Mark message as read
+app.post("/api/messages/:messageId/read", async (request, response) => {
+  const { messageId } = request.params;
+
+  try {
+    const user = await requireAuthenticatedUser(request, response);
+    if (!user) {
+      return;
+    }
+
+    if (!(await hasSupabaseMessagingTables())) {
+      const message = getLocalMessageById(messageId);
+      if (!message) {
+        return jsonError(response, 404, "Message not found");
+      }
+
+      const conversation = getLocalConversationById(message.conversation_id);
+      if (!conversation) {
+        return jsonError(response, 404, "Conversation not found");
+      }
+
+      if (conversation.student_id !== user.id && conversation.teacher_id !== user.id) {
+        return jsonError(response, 403, "Forbidden");
+      }
+
+      markLocalMessageRead({
+        messageId,
+        readerId: user.id
+      });
+
+      return response.json({
+        ok: true,
+        message: "Message marked as read"
+      });
+    }
+
+    // Check if message exists and user can see it
+    const { data: message, error: msgError } = await supabaseAdmin
+      .from("messages")
+      .select("conversation_id")
+      .eq("id", messageId)
+      .single();
+
+    if (msgError || !message) {
+      return jsonError(response, 404, "Message not found");
+    }
+
+    // Verify user has access to conversation
+    const { data: conv, error: convError } = await supabaseAdmin
+      .from("conversations")
+      .select("*")
+      .eq("id", message.conversation_id)
+      .single();
+
+    if (convError || !conv) {
+      return jsonError(response, 404, "Conversation not found");
+    }
+
+    if (conv.student_id !== user.id && conv.teacher_id !== user.id) {
+      return jsonError(response, 403, "Forbidden");
+    }
+
+    // Insert or update read status
+    await supabaseAdmin
+      .from("message_read_status")
+      .upsert({
+        message_id: messageId,
+        reader_id: user.id,
+        read_at: new Date().toISOString()
+      }, { onConflict: "message_id,reader_id" });
+
+    response.json({
+      ok: true,
+      message: "Message marked as read"
+    });
+  } catch (error) {
+    console.error("Error marking message as read", error);
+    jsonError(response, 500, publicErrorMessage("Failed to mark message as read.", error));
+  }
+});
+
+// Create or get conversation with specific user
+app.post("/api/messages/conversations/start", async (request, response) => {
+  const { otherUserId, lessonId } = request.body || {};
+
+  if (!otherUserId) {
+    return jsonError(response, 400, "Missing otherUserId");
+  }
+
+  try {
+    const user = await requireAuthenticatedUser(request, response);
+    if (!user) {
+      return;
+    }
+
+    // Determine who is student and who is teacher
+    const userId = String(user.id || "").trim();
+    const currentUserIsTeacher = await isTeacherUser(user);
+    const otherUserRole = await getProfileRole(otherUserId);
+    const otherUserIsTeacher = TEACHER_ROLES.has(otherUserRole) || (await hasTeacherProfile(otherUserId));
+
+    // One must be student, one must be teacher
+    if (currentUserIsTeacher === otherUserIsTeacher) {
+      return jsonError(response, 400, "Conversation must be between a student and a teacher");
+    }
+
+    const studentId = currentUserIsTeacher ? otherUserId : userId;
+    const teacherId = currentUserIsTeacher ? userId : otherUserId;
+    const { conversation, created } = await getOrCreateDirectConversation({
+      studentId,
+      teacherId,
+      lessonId
+    });
+
+    if (!conversation) {
+      return jsonError(response, 500, "Could not create conversation.");
+    }
+
+    response.json({
+      ok: true,
+      conversation,
+      created
+    });
+  } catch (error) {
+    console.error("Error creating/starting conversation", error);
+    jsonError(response, 500, publicErrorMessage("Failed to start conversation.", error));
+  }
+});
+
+app.get("/api/messages/default-conversation", async (request, response) => {
+  try {
+    const user = await requireAuthenticatedUser(request, response);
+    if (!user) {
+      return;
+    }
+
+    if (await isTeacherUser(user)) {
+      return jsonError(response, 403, "Student access only.");
+    }
+
+    const userId = String(user.id || "").trim();
+    const useSupabaseMessaging = await hasSupabaseMessagingTables();
+
+    if (!useSupabaseMessaging) {
+      let conversation = getLatestLocalStudentConversation(userId);
+      const directoryContext = await getMessagingDirectoryContext();
+      const teacherId = conversation
+        ? String(conversation.teacher_id || "").trim()
+        : getDefaultMessagingTeacherId(userId, directoryContext);
+
+      if (!required(teacherId)) {
+        return jsonError(response, 404, "No teacher account is available for messaging yet.");
+      }
+
+      if (!conversation) {
+        const conversationResult = await getOrCreateDirectConversation({
+          studentId: userId,
+          teacherId
+        });
+        conversation = conversationResult.conversation || null;
+      }
+
+      if (!conversation) {
+        return jsonError(response, 500, "Could not create conversation.");
+      }
+
+      return response.json({
+        ok: true,
+        conversation,
+        partner: getMessagingParticipantSummaryById(teacherId, directoryContext),
+        messages: listLocalMessagesForConversation(conversation.id)
+      });
+    }
+
+    const { data: conversationRows, error: conversationError } = await supabaseAdmin
+      .from("conversations")
+      .select("*")
+      .eq("student_id", userId)
+      .order("last_message_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (conversationError) {
+      throw conversationError;
+    }
+
+    let conversation = Array.isArray(conversationRows) && conversationRows.length ? conversationRows[0] : null;
+    const directoryContext = await getMessagingDirectoryContext();
+    const teacherId = conversation
+      ? String(conversation.teacher_id || "").trim()
+      : getDefaultMessagingTeacherId(userId, directoryContext);
+
+    if (!required(teacherId)) {
+      return jsonError(response, 404, "No teacher account is available for messaging yet.");
+    }
+
+    if (!conversation) {
+      const conversationResult = await getOrCreateDirectConversation({
+        studentId: userId,
+        teacherId
+      });
+      conversation = conversationResult.conversation || null;
+    }
+
+    if (!conversation) {
+      return jsonError(response, 500, "Could not create conversation.");
+    }
+
+    const { data: messages, error: messagesError } = await supabaseAdmin
+      .from("messages")
+      .select("*, message_read_status(reader_id, read_at)")
+      .eq("conversation_id", conversation.id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true });
+
+    if (messagesError) {
+      throw messagesError;
+    }
+
+    response.json({
+      ok: true,
+      conversation,
+      partner: getMessagingParticipantSummaryById(teacherId, directoryContext),
+      messages: messages || []
+    });
+  } catch (error) {
+    console.error("Error fetching default conversation", error);
+    jsonError(response, 500, publicErrorMessage("Failed to load default conversation.", error));
   }
 });
 

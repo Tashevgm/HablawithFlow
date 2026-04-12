@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teacher Dashboard | Hablawithflow</title>
+  <title>Teacher Messages | Hablawithflow</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -31,7 +31,7 @@
         <p class="teacher-sidebar-section-label">Menu</p>
 
         <nav class="teacher-sidebar-nav" aria-label="Teacher navigation links">
-          <a class="teacher-app-nav-link active" href="admin.html" aria-current="page">
+          <a class="teacher-app-nav-link" href="admin.html">
             <span class="teacher-nav-icon" aria-hidden="true">D</span>
             <span>Dashboard</span>
           </a>
@@ -43,7 +43,7 @@
             <span class="teacher-nav-icon" aria-hidden="true">S</span>
             <span>Students</span>
           </a>
-          <a class="teacher-app-nav-link" href="messages.html">
+          <a class="teacher-app-nav-link active" href="messages.html" aria-current="page">
             <span class="teacher-nav-icon" aria-hidden="true">M</span>
             <span>Messages</span>
           </a>
@@ -74,8 +74,8 @@
       <div class="teacher-dashboard-main">
         <header class="teacher-dashboard-topbar">
           <div>
-            <p class="teacher-topbar-kicker">Daily Overview</p>
-            <h1 class="teacher-topbar-title">Teacher Dashboard</h1>
+            <p class="teacher-topbar-kicker">WhatsApp-style Inbox</p>
+            <h1 class="teacher-topbar-title">Messages</h1>
           </div>
           <div class="teacher-topbar-tools">
             <span class="teacher-date-chip" id="teacher-dashboard-date">Date</span>
@@ -89,68 +89,53 @@
           </div>
         </header>
 
-        <div class="form-error teacher-dashboard-error" id="slot-error" hidden></div>
-
-        <section class="teacher-page-hero-card">
-          <div class="teacher-page-hero-copy">
-            <span class="teacher-page-eyebrow">Simple Main Page</span>
-            <h2 id="teacher-home-greeting-title">Buenas tardes, Teacher.</h2>
-            <p id="teacher-home-greeting-subtitle">
-              Your most important teaching information lives here: next lessons, calendar visibility, and follow-ups.
-            </p>
-          </div>
-          <div class="teacher-home-stat-grid">
-            <article class="teacher-home-stat-card">
-              <span>Today</span>
-              <strong id="teacher-home-stat-today">0</strong>
-              <small>Lessons left today</small>
-            </article>
-            <article class="teacher-home-stat-card">
-              <span>Upcoming</span>
-              <strong id="teacher-home-stat-bookings">0</strong>
-              <small>Confirmed upcoming lessons</small>
-            </article>
-            <article class="teacher-home-stat-card">
-              <span>Students</span>
-              <strong id="teacher-home-stat-students">0</strong>
-              <small>Active learners</small>
-            </article>
-            <article class="teacher-home-stat-card">
-              <span>Open Slots</span>
-              <strong id="teacher-home-stat-open-slots">0</strong>
-              <small>Available times to book</small>
-            </article>
-            <article class="teacher-home-stat-card accent">
-              <span>Pending</span>
-              <strong id="teacher-home-stat-pending">0</strong>
-              <small>Payments needing review</small>
-            </article>
-          </div>
-        </section>
-
-        <section class="teacher-home-layout">
-          <article class="teacher-panel teacher-panel-large">
-            <div class="teacher-panel-heading">
-              <div>
-                <span class="section-kicker">Calendar</span>
-                <h3>Today's schedule</h3>
+        <section class="messages-shell messages-shell-v2">
+          <div class="messages-container whatsapp-layout">
+            <aside class="messages-sidebar whatsapp-sidebar">
+              <div class="messages-sidebar-header whatsapp-sidebar-header">
+                <div>
+                  <span class="section-kicker">Inbox</span>
+                  <h2>Conversations</h2>
+                </div>
+                <input type="search" id="conversations-search" class="conversations-search" placeholder="Search conversations...">
+                <div class="booking-feedback messages-sidebar-feedback" id="conversation-start-feedback" hidden></div>
               </div>
-              <a class="btn-outline" href="teacher-calendar.html">Open calendar</a>
-            </div>
-            <div class="teacher-week-preview-grid" id="teacher-week-preview-grid"></div>
-          </article>
+              <div class="conversations-list whatsapp-conversations-list" id="conversations-list"></div>
+            </aside>
 
-          <article class="teacher-panel teacher-panel-narrow">
-            <div class="teacher-panel-heading">
-              <div>
-                <span class="section-kicker">Next Lessons</span>
-                <h3>What is coming up</h3>
+            <div class="messages-content whatsapp-chat-content">
+              <div class="chat-empty whatsapp-chat-empty" id="chat-empty">
+                <div class="chat-empty-icon">M</div>
+                <p class="chat-empty-title">No conversation selected</p>
+                <p class="chat-empty-text">Choose a student from the left to open the chat.</p>
+              </div>
+
+              <div class="chat-thread whatsapp-chat-thread" id="chat-thread" hidden>
+                <div class="chat-header whatsapp-chat-header">
+                  <div class="whatsapp-chat-person">
+                    <div class="whatsapp-chat-avatar" id="chat-user-avatar">S</div>
+                    <div>
+                      <h3 id="chat-user-name">Conversation</h3>
+                      <p id="chat-user-role" class="chat-user-role"></p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="chat-messages-scroll whatsapp-chat-scroll" id="chat-messages-scroll">
+                  <div class="chat-messages" id="chat-messages"></div>
+                </div>
+
+                <div class="chat-input-area whatsapp-chat-input-area">
+                  <div class="booking-feedback" id="message-error" hidden></div>
+                  <div class="chat-input-form whatsapp-composer">
+                    <textarea id="message-input" class="message-textarea" placeholder="Type a message..." rows="2"></textarea>
+                    <button id="send-message-btn" class="btn-submit" type="button">Send</button>
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="teacher-upnext-list" id="teacher-home-up-next-list"></div>
-          </article>
+          </div>
         </section>
-
       </div>
     </div>
   </main>
@@ -162,6 +147,7 @@
   <script src="assets/js/email-api.js"></script>
   <script src="assets/js/portal-data.js"></script>
   <script src="assets/js/admin-portal.js"></script>
+  <script src="assets/js/messages.js"></script>
 </body>
 </html>
 

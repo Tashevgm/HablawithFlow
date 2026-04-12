@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Student Performance | Hablawithflow</title>
+  <title>Teacher Students | Hablawithflow</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -12,222 +12,172 @@
   >
   <link rel="stylesheet" href="assets/css/styles.css">
 </head>
-<body class="portal-app">
-  <header class="site-header">
-    <nav class="nav" aria-label="Primary">
-      <a href="index.html" class="nav-logo">Hablawithflow</a>
-      <div class="nav-links">
-        <a href="index.html#about">About</a>
-        <a href="index.html#plans">Lessons</a>
-        <a href="index.html#testimonials">Testimonials</a>
-        <a href="student-portal.html">Student Portal</a>
-        <a href="register.html">Register</a>
-        <a href="index.html#booking" class="btn-nav">Book Now</a>
-      </div>
-    </nav>
-  </header>
-
-  <main class="site-main portal-main">
-    <section class="portal-hero">
-      <div>
-        <p class="hero-badge">Teacher Students</p>
-        <h1>Review student performance and update learning progress.</h1>
-        <p class="hero-copy">
-          Keep roster, lesson progress, coaching notes, and milestones on a dedicated page so the
-          teacher workflow is easier to scan.
-        </p>
-      </div>
-      <div class="portal-hero-card">
-        <div class="stat-stack">
-          <span class="stat-kicker">Teacher access</span>
-          <strong class="stat-number stat-word">Role-based access</strong>
-          <span class="stat-caption">Only teacher and admin role accounts can open this dashboard.</span>
+<body class="portal-app teacher-dashboard-app teacher-portal-v2">
+  <main class="teacher-dashboard-shell">
+    <div id="admin-dashboard" class="teacher-dashboard-app-shell" hidden>
+      <aside class="teacher-dashboard-sidebar" id="teacher-dashboard-sidebar" aria-label="Teacher navigation">
+        <div class="teacher-sidebar-brand">
+          <div class="teacher-sidebar-brand-row">
+            <div class="teacher-sidebar-brand-copy">
+              <div class="teacher-sidebar-logo" aria-label="Teacher profile">
+                <span>Hablawithflow</span>
+              </div>
+              <span class="teacher-sidebar-kicker">Teacher Portal</span>
+            </div>
+            <button class="teacher-sidebar-brand-toggle" type="button" data-sidebar-toggle aria-controls="teacher-dashboard-sidebar" aria-expanded="false" aria-label="Fold sidebar">&lt;</button>
+          </div>
         </div>
-      </div>
-    </section>
 
-    <section class="portal-shell">
-      <div id="admin-dashboard" hidden>
-        <section class="portal-grid portal-grid-full">
-          <article class="dashboard-card">
-            <div class="card-heading">
-              <div>
-                <h2>Teacher Profile</h2>
-                <p class="portal-sub">Keep your teacher details up to date inside the portal.</p>
-              </div>
+        <p class="teacher-sidebar-section-label">Menu</p>
+
+        <nav class="teacher-sidebar-nav" aria-label="Teacher navigation links">
+          <a class="teacher-app-nav-link" href="admin.html">
+            <span class="teacher-nav-icon" aria-hidden="true">D</span>
+            <span>Dashboard</span>
+          </a>
+          <a class="teacher-app-nav-link" href="teacher-calendar.html">
+            <span class="teacher-nav-icon" aria-hidden="true">C</span>
+            <span>Calendar</span>
+          </a>
+          <a class="teacher-app-nav-link active" href="teacher-students.html" aria-current="page">
+            <span class="teacher-nav-icon" aria-hidden="true">S</span>
+            <span>Students</span>
+          </a>
+          <a class="teacher-app-nav-link" href="messages.html">
+            <span class="teacher-nav-icon" aria-hidden="true">M</span>
+            <span>Messages</span>
+          </a>
+          <a class="teacher-app-nav-link" href="teacher-wallet.html">
+            <span class="teacher-nav-icon" aria-hidden="true">W</span>
+            <span>Wallet</span>
+          </a>
+          <a class="teacher-app-nav-link" href="teacher-profile.html">
+            <span class="teacher-nav-icon" aria-hidden="true">P</span>
+            <span>Profile</span>
+          </a>
+          <a class="teacher-app-nav-link" href="teacher-settings.html">
+            <span class="teacher-nav-icon" aria-hidden="true">SE</span>
+            <span>Settings</span>
+          </a>
+        </nav>
+
+        <div class="teacher-sidebar-footer">
+          <button class="teacher-app-nav-link" type="button" id="teacher-logout">
+            <span class="teacher-nav-icon" aria-hidden="true">LO</span>
+            <span>Log Out</span>
+          </button>
+        </div>
+        <button class="teacher-sidebar-edge-toggle" type="button" data-sidebar-toggle aria-controls="teacher-dashboard-sidebar" aria-expanded="false" aria-label="Fold sidebar">&lt;</button>
+      </aside>
+      <button class="teacher-sidebar-backdrop" id="teacher-sidebar-backdrop" type="button" aria-label="Close navigation"></button>
+
+      <div class="teacher-dashboard-main">
+        <header class="teacher-dashboard-topbar">
+          <div>
+            <p class="teacher-topbar-kicker">Personalized Teaching</p>
+            <h1 class="teacher-topbar-title">Students</h1>
+          </div>
+          <div class="teacher-topbar-tools">
+            <span class="teacher-date-chip" id="teacher-dashboard-date">Date</span>
+            <div class="teacher-topbar-identity">
+              <strong id="teacher-topbar-name">Teacher</strong>
+              <span id="teacher-topbar-role">Educator</span>
             </div>
+            <button class="teacher-avatar-toggle" type="button" data-sidebar-toggle aria-controls="teacher-dashboard-sidebar" aria-expanded="false" aria-label="Toggle navigation">
+              <img id="teacher-sidebar-avatar-image" data-teacher-avatar src="https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=200&q=80" alt="Teacher profile">
+            </button>
+          </div>
+        </header>
 
-            <div class="portal-profile-layout">
-              <div class="portal-profile-avatar-wrap">
-                <img
-                  id="teacher-profile-avatar-preview"
-                  class="portal-profile-avatar"
-                  src="https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80"
-                  alt="Teacher profile avatar"
-                >
-                <label for="teacher-profile-avatar-url">Profile picture URL</label>
-                <input type="url" id="teacher-profile-avatar-url" placeholder="https://...">
-              </div>
-
-              <div>
-                <div class="portal-profile-grid">
-                  <div class="form-group">
-                    <label for="teacher-profile-name">Full name</label>
-                    <input type="text" id="teacher-profile-name" maxlength="80">
-                  </div>
-                  <div class="form-group">
-                    <label for="teacher-profile-email">Email</label>
-                    <input type="email" id="teacher-profile-email" readonly>
-                  </div>
-                </div>
-
-                <div class="portal-profile-grid">
-                  <div class="form-group">
-                    <label for="teacher-profile-timezone">Timezone</label>
-                    <input type="text" id="teacher-profile-timezone" maxlength="80" placeholder="e.g. Europe/London">
-                  </div>
-                  <div class="form-group">
-                    <label for="teacher-profile-role">Role</label>
-                    <input type="text" id="teacher-profile-role" readonly>
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  <label for="teacher-profile-bio">Bio / note</label>
-                  <textarea id="teacher-profile-bio" maxlength="600" placeholder="Tell students about your teaching approach."></textarea>
-                </div>
-
-                <button class="btn-submit" id="teacher-profile-save" type="button">Save Teacher Profile</button>
-                <div id="teacher-profile-feedback" class="booking-feedback" hidden></div>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="portal-grid portal-grid-top">
-          <article class="dashboard-card stat-card">
-            <span class="stat-kicker">Active students</span>
-            <strong class="stat-number" id="stat-students">0</strong>
-            <span class="stat-caption">Learners currently tracked in the portal</span>
-          </article>
-          <article class="dashboard-card stat-card">
-            <span class="stat-kicker">Average completion</span>
-            <strong class="stat-number" id="stat-average-progress">0%</strong>
-            <span class="stat-caption">Average completion across current student plans</span>
-          </article>
-          <article class="dashboard-card stat-card">
-            <span class="stat-kicker">Upcoming lessons</span>
-            <strong class="stat-number" id="stat-student-upcoming">0</strong>
-            <span class="stat-caption">Confirmed sessions attached to student profiles</span>
-          </article>
-        </section>
-
-        <section class="portal-grid portal-grid-wide">
-          <div class="portal-column-stack">
-            <article class="dashboard-card">
-              <div class="card-heading">
-                <div>
-                  <h2>Student Roster Snapshot</h2>
-                  <p class="portal-sub">Quick overview of progress across your active learners.</p>
-                </div>
-                <div class="roster-tools">
-                  <input
-                    id="student-roster-filter"
-                    class="roster-search"
-                    type="search"
-                    placeholder="Search student, email, track..."
-                    aria-label="Search students in roster"
-                  >
-                  <select id="student-group-filter" class="roster-group-filter" aria-label="Filter students by group">
-                    <option value="">All groups</option>
-                  </select>
-                  <span id="student-roster-count" class="roster-count">0 shown</span>
-                </div>
-              </div>
-              <div class="stack-list roster-scroll" id="student-roster"></div>
+        <section class="teacher-page-hero-card compact">
+          <div class="teacher-page-hero-copy">
+            <span class="teacher-page-eyebrow">Student Overview</span>
+            <h2>Every student in one place.</h2>
+            <p>Open a learner to see lessons, level, learning goals, hobbies, occupation, notes, and planning context.</p>
+          </div>
+          <div class="teacher-home-stat-grid calendar-stats-grid">
+            <article class="teacher-home-stat-card">
+              <span>Students</span>
+              <strong id="stat-students">0</strong>
+              <small>Active learners</small>
             </article>
-
-            <article class="dashboard-card">
-              <div class="card-heading">
-                <div>
-                  <h2>Selected Student</h2>
-                  <p class="portal-sub">Individual performance, lesson flow, and teaching context.</p>
-                </div>
-              </div>
-              <div class="student-detail-shell" id="student-detail-shell">
-                <div class="student-detail-top">
-                  <div>
-                    <h3 id="student-detail-name">Select a student</h3>
-                    <p class="portal-sub" id="student-detail-track">Choose a roster entry to load details.</p>
-                  </div>
-                  <span class="status-pill muted" id="student-detail-level">No student selected</span>
-                </div>
-
-                <div class="portal-shortcuts portal-shortcuts-tight">
-                  <a class="btn-outline" id="open-student-profile" href="student-profile.html">Open Full Profile</a>
-                </div>
-
-                <div class="student-detail-stats">
-                  <article class="summary-pill accent-red">
-                    <span>Progress</span>
-                    <strong id="student-detail-progress">0%</strong>
-                    <em id="student-detail-progress-copy">0 of 0 lessons completed</em>
-                  </article>
-                  <article class="summary-pill accent-gold">
-                    <span>Streak</span>
-                    <strong id="student-detail-streak">0</strong>
-                    <em id="student-detail-streak-copy">No active learning streak yet.</em>
-                  </article>
-                </div>
-
-                <article class="list-card detail-highlight-card">
-                  <strong>Next milestone</strong>
-                  <p id="student-detail-milestone">No milestone loaded.</p>
-                </article>
-
-                <div>
-                  <h4 class="portal-subheading">Focus Areas</h4>
-                  <div class="chip-row" id="student-detail-focus"></div>
-                </div>
-
-                <div class="student-detail-split">
-                  <div>
-                    <h4 class="portal-subheading">Upcoming Lessons</h4>
-                    <div class="stack-list compact-stack" id="student-detail-upcoming"></div>
-                  </div>
-                  <div>
-                    <h4 class="portal-subheading">Lesson History</h4>
-                    <div class="stack-list compact-stack" id="student-detail-history"></div>
-                  </div>
-                </div>
-
-                <article class="list-card detail-highlight-card">
-                  <strong>Coach Note</strong>
-                  <p id="student-detail-note">No note loaded.</p>
-                </article>
-              </div>
+            <article class="teacher-home-stat-card">
+              <span>Upcoming lessons</span>
+              <strong id="stat-student-upcoming">0</strong>
+              <small>Next booked sessions</small>
             </article>
           </div>
+        </section>
 
-          <article class="dashboard-card">
-            <div class="card-heading">
+        <select id="student-select" hidden></select>
+
+        <section class="teacher-home-layout teacher-students-layout">
+          <article class="teacher-panel teacher-panel-narrow teacher-student-roster-panel">
+            <div class="teacher-panel-heading">
               <div>
-                <h2>Student Progress Editor</h2>
-                <p class="portal-sub">Update tracks, lesson counts, focus areas, and coaching notes.</p>
+                <span class="section-kicker">Roster</span>
+                <h3>All students</h3>
               </div>
-              <div class="portal-shortcuts portal-shortcuts-tight">
-                <a href="admin.html" class="btn-outline">Open Calendar</a>
-                <button class="btn-outline portal-link" id="teacher-logout" type="button">Log Out</button>
+            </div>
+            <div class="teacher-student-roster-tools">
+              <input
+                id="student-roster-filter"
+                class="roster-search"
+                type="search"
+                placeholder="Search student, email, level..."
+                aria-label="Search students in roster"
+              >
+              <select id="student-group-filter" class="roster-group-filter" aria-label="Filter students by group">
+                <option value="">All groups</option>
+              </select>
+              <span id="student-roster-count" class="roster-count">0 shown</span>
+            </div>
+            <div class="stack-list roster-scroll teacher-student-roster-list" id="student-roster"></div>
+          </article>
+
+          <article class="teacher-panel teacher-panel-large teacher-student-detail-panel">
+            <div class="teacher-panel-heading">
+              <div>
+                <span class="section-kicker">Student View</span>
+                <h3 id="student-detail-name">Select a student</h3>
+                <p class="portal-sub" id="student-detail-track">Choose a roster entry to load details.</p>
+              </div>
+              <div class="teacher-student-detail-top-actions">
+                <span class="status-pill muted" id="student-detail-level">No student selected</span>
+                <a class="btn-outline" id="open-student-profile" href="student-profile.html">Open full profile</a>
               </div>
             </div>
 
-            <div class="form-group">
-              <label for="student-select">Student</label>
-              <select id="student-select"></select>
+            <div class="teacher-student-snapshot-grid">
+              <article class="summary-pill accent-red">
+                <span>Completed lessons</span>
+                <strong id="student-detail-progress">0</strong>
+                <em id="student-detail-progress-copy">0 completed lessons</em>
+              </article>
+              <article class="summary-pill accent-teal">
+                <span>Next milestone</span>
+                <strong id="student-detail-milestone">No milestone loaded.</strong>
+                <em>Current learning checkpoint</em>
+              </article>
+            </div>
+
+            <div>
+              <h4 class="portal-subheading">Focus Area</h4>
+              <div class="chip-row" id="student-detail-focus"><span class="focus-chip">No focus areas yet</span></div>
+            </div>
+          </article>
+        </section>
+
+        <section class="teacher-home-layout teacher-home-layout-bottom">
+          <article class="teacher-panel teacher-panel-large">
+            <div class="teacher-panel-heading">
+              <div>
+                <span class="section-kicker">Student Groups</span>
+                <h3>Optional grouping</h3>
+              </div>
             </div>
 
             <div class="group-manager-shell">
-              <h3 class="portal-subheading">Student Groups</h3>
               <div class="group-manager-row">
                 <label for="new-student-group">Create Group</label>
                 <div class="group-inline-actions">
@@ -246,78 +196,162 @@
               <div class="stack-list compact-stack" id="student-group-list"></div>
               <div id="student-group-feedback" class="booking-feedback" hidden></div>
             </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="student-track">Track</label>
-                <input type="text" id="student-track">
-              </div>
-              <div class="form-group">
-                <label for="student-level">Level</label>
-                <input type="text" id="student-level">
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="student-completed">Completed Lessons</label>
-                <input type="number" id="student-completed" min="0">
-              </div>
-              <div class="form-group">
-                <label for="student-total">Total Lessons</label>
-                <input type="number" id="student-total" min="1">
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="student-streak">Current Streak</label>
-                <input type="number" id="student-streak" min="0">
-              </div>
-              <div class="form-group">
-                <label for="student-milestone">Next Milestone</label>
-                <input type="text" id="student-milestone">
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="student-focus">Focus Areas</label>
-              <input type="text" id="student-focus" placeholder="Separate items with commas">
-            </div>
-
-            <div class="form-group">
-              <label for="student-note">Coach Note</label>
-              <textarea id="student-note" placeholder="Write the latest coaching note..."></textarea>
-            </div>
-
-            <button class="btn-submit" id="save-student" type="button">Save Student Progress</button>
-            <div id="student-save-message" class="booking-feedback" hidden></div>
           </article>
         </section>
-      </div>
-    </section>
-  </main>
 
-  <footer class="site-footer">
-    <div class="footer-grid">
-      <div>
-        <div class="footer-brand">Hablawithflow</div>
-        <p class="footer-desc">Teaching Spanish through rhythm, connection, and real-world conversation.</p>
-      </div>
-      <div class="footer-col">
-        <h4>Navigate</h4>
-        <a href="index.html">Public Site</a>
-        <a href="student-portal.html">Student Portal</a>
-      </div>
-      <div class="footer-col">
-        <h4>Portal</h4>
-        <a href="teacher-login.html">Teacher Login</a>
-        <a href="admin.html">Teacher Calendar</a>
-        <a href="teacher-students.html">Student Performance</a>
+        <div class="booking-modal teacher-student-profile-modal" id="teacher-student-profile-modal" hidden>
+          <button
+            class="booking-modal-backdrop"
+            id="teacher-student-profile-modal-backdrop"
+            type="button"
+            aria-label="Close full student profile"
+          ></button>
+          <section
+            class="booking-modal-panel teacher-student-profile-modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="teacher-student-profile-modal-name"
+          >
+            <div class="booking-modal-top teacher-student-profile-modal-top">
+              <div>
+                <span class="section-kicker">Full Student Profile</span>
+                <h3 id="teacher-student-profile-modal-name">Student profile</h3>
+                <p class="booking-modal-copy" id="teacher-student-profile-modal-copy">
+                  Open a student to review their full learning context.
+                </p>
+              </div>
+              <div class="teacher-student-profile-modal-actions">
+                <a class="btn-outline" id="teacher-student-profile-page-link" href="student-profile.html">Open dedicated page</a>
+                <button class="booking-modal-close" id="teacher-student-profile-modal-close" type="button">Close</button>
+              </div>
+            </div>
+
+            <div class="teacher-student-profile-modal-overview">
+              <article class="teacher-student-profile-highlight">
+                <span>Completed lessons</span>
+                <strong id="teacher-student-profile-modal-progress">0</strong>
+                <em id="teacher-student-profile-modal-progress-copy">0 completed lessons</em>
+              </article>
+              <article class="teacher-student-profile-highlight">
+                <span>Track</span>
+                <strong id="teacher-student-profile-modal-track">Track not set</strong>
+                <em id="teacher-student-profile-modal-level">Level unavailable</em>
+              </article>
+              <article class="teacher-student-profile-highlight">
+                <span>Timezone</span>
+                <strong id="teacher-student-profile-modal-timezone">Timezone not added yet</strong>
+                <em id="teacher-student-profile-modal-upcoming">No upcoming lessons booked</em>
+              </article>
+              <article class="teacher-student-profile-highlight">
+                <span>Why learning</span>
+                <strong id="teacher-student-profile-modal-why">No learning goal added yet.</strong>
+                <em id="teacher-student-profile-modal-milestone">No milestone set yet.</em>
+              </article>
+            </div>
+
+            <div class="teacher-student-profile-modal-grid">
+              <article class="teacher-context-card teacher-student-profile-card">
+                <span class="section-kicker">Essentials</span>
+                <div class="teacher-student-profile-stat-list">
+                  <div>
+                    <span>Email</span>
+                    <strong id="teacher-student-profile-modal-email">No email available</strong>
+                  </div>
+                  <div>
+                    <span>Occupation</span>
+                    <strong id="teacher-student-profile-modal-occupation">No occupation added yet</strong>
+                  </div>
+                  <div>
+                    <span>Languages</span>
+                    <div class="chip-row teacher-student-profile-chip-list" id="teacher-student-profile-modal-languages">
+                      <span class="focus-chip teacher-student-profile-empty-chip">No languages added yet</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span>Hobbies</span>
+                    <div class="chip-row teacher-student-profile-chip-list" id="teacher-student-profile-modal-hobbies">
+                      <span class="focus-chip teacher-student-profile-empty-chip">No hobbies added yet</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="teacher-context-card teacher-student-profile-card">
+                <span class="section-kicker">Lesson Context</span>
+                <div class="teacher-student-profile-stat-list">
+                  <div>
+                    <span>Focus areas</span>
+                    <div class="chip-row teacher-student-profile-chip-list" id="teacher-student-profile-modal-focus">
+                      <span class="focus-chip teacher-student-profile-empty-chip">No focus areas yet</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span>Weekly focus</span>
+                    <strong id="teacher-student-profile-modal-weekly-focus">No weekly focus added yet</strong>
+                  </div>
+                  <div>
+                    <span>Interests</span>
+                    <p class="teacher-student-profile-note" id="teacher-student-profile-modal-interests">No interests added yet.</p>
+                  </div>
+                  <div>
+                    <span>Personality notes</span>
+                    <p class="teacher-student-profile-note" id="teacher-student-profile-modal-personality">No personality notes added yet.</p>
+                  </div>
+                </div>
+              </article>
+
+              <article class="teacher-context-card teacher-student-profile-card">
+                <span class="section-kicker">Learning Plan</span>
+                <div class="teacher-student-profile-stat-list">
+                  <div>
+                    <span>Plan title</span>
+                    <strong id="teacher-student-profile-modal-plan-title">No plan title added yet</strong>
+                  </div>
+                  <div>
+                    <span>Objectives</span>
+                    <div class="teacher-student-profile-list" id="teacher-student-profile-modal-objectives">
+                      <article>
+                        <strong>No objectives added yet.</strong>
+                        <p>Add a learning plan to surface the student's next targets.</p>
+                      </article>
+                    </div>
+                  </div>
+                  <div>
+                    <span>Coach note</span>
+                    <p class="teacher-student-profile-note" id="teacher-student-profile-modal-coach-note">No coach note added yet.</p>
+                  </div>
+                </div>
+              </article>
+
+              <article class="teacher-context-card teacher-student-profile-card">
+                <span class="section-kicker">Activity</span>
+                <div class="teacher-student-profile-stat-list">
+                  <div>
+                    <span>Recent lessons</span>
+                    <div class="teacher-student-profile-list" id="teacher-student-profile-modal-lessons">
+                      <article>
+                        <strong>No lessons logged yet.</strong>
+                        <p>Add lesson logs to build a teaching history.</p>
+                      </article>
+                    </div>
+                  </div>
+                  <div>
+                    <span>Homework files</span>
+                    <div class="teacher-student-profile-list" id="teacher-student-profile-modal-homework">
+                      <article>
+                        <strong>No homework uploaded yet.</strong>
+                        <p>Uploaded materials will appear here.</p>
+                      </article>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
-    <div class="footer-bottom">&copy; 2026 Hablawithflow. All rights reserved.</div>
-  </footer>
+  </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="assets/js/supabase-client.js"></script>
@@ -328,6 +362,4 @@
   <script src="assets/js/admin-portal.js"></script>
 </body>
 </html>
-
-
 

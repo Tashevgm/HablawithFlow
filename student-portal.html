@@ -54,68 +54,131 @@
         <div class="booking-feedback" id="student-login-feedback" hidden></div>
       </div>
 
-      <div id="student-dashboard" hidden>
-        <section class="student-status-wrap">
-          <article class="dashboard-card student-status-bar">
-            <div class="student-status-intro">
-              <span class="section-kicker">Student Portal</span>
-              <h2 id="student-dashboard-title">Welcome back</h2>
-              <p class="portal-sub" id="student-summary-caption">Your next step is always visible here.</p>
+      <div id="student-dashboard" class="teacher-dashboard-app-shell" hidden>
+        <aside class="teacher-dashboard-sidebar" id="student-dashboard-sidebar" aria-label="Student navigation">
+          <div class="teacher-sidebar-brand student-sidebar-brand">
+            <div class="teacher-sidebar-brand-row">
+              <div class="teacher-sidebar-brand-copy">
+                <div class="teacher-sidebar-logo" aria-label="Student portal">
+                  <span>Hablawithflow</span>
+                </div>
+                <span class="teacher-sidebar-kicker">Student Portal</span>
+              </div>
+              <button class="teacher-sidebar-brand-toggle" type="button" data-student-sidebar-toggle aria-controls="student-dashboard-sidebar" aria-expanded="false" aria-label="Fold sidebar">&lt;</button>
             </div>
+          </div>
 
-            <div class="student-status-metrics">
-              <article class="student-status-item">
-                <span>Next lesson</span>
-                <strong id="student-next-lesson-summary">No lesson booked</strong>
-              </article>
-              <article class="student-status-item">
-                <span>Payment</span>
-                <strong id="student-payment-summary">Waiting for booking</strong>
-              </article>
-              <button
-                class="list-action meet student-join-meeting student-status-join-btn"
-                id="student-status-join"
-                type="button"
-                data-booking-id=""
-                data-lesson-date=""
-                data-lesson-time=""
-                hidden
-                disabled
-              >
-                Join Meeting
+          <p class="teacher-sidebar-section-label">Menu</p>
+
+          <nav class="teacher-sidebar-nav" id="student-portal-nav" aria-label="Student portal sections">
+            <button class="teacher-app-nav-link active" type="button" data-student-section="book" aria-selected="true">
+              <span class="teacher-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4"></path><path d="M16 2v4"></path><path d="M3 10h18"></path><rect x="3" y="4" width="18" height="17" rx="2"></rect></svg>
+              </span>
+              <span>Book Lesson</span>
+            </button>
+            <button class="teacher-app-nav-link" type="button" data-student-section="lessons" aria-selected="false">
+              <span class="teacher-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6"></path><path d="M6 4v16"></path><path d="M9 8h6"></path><path d="M9 12h6"></path><path d="M9 16h4"></path></svg>
+              </span>
+              <span>My Lessons</span>
+            </button>
+            <button class="teacher-app-nav-link" type="button" data-student-section="progress" aria-selected="false">
+              <span class="teacher-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16"></path><path d="M7 16v-4"></path><path d="M12 16V8"></path><path d="M17 16V5"></path></svg>
+              </span>
+              <span>Progress</span>
+            </button>
+            <button class="teacher-app-nav-link" type="button" data-student-section="community" aria-selected="false">
+              <span class="teacher-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path><circle cx="9.5" cy="7" r="3"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 4.13a4 4 0 0 1 0 7.75"></path></svg>
+              </span>
+              <span>Community</span>
+            </button>
+            <button class="teacher-app-nav-link" type="button" data-student-section="messages" aria-selected="false">
+              <span class="teacher-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-8.5 8.5H7l-4 2 1.5-4A8.5 8.5 0 1 1 21 12z"></path></svg>
+              </span>
+              <span>Messages</span>
+            </button>
+          </nav>
+
+          <div class="teacher-sidebar-footer">
+            <button class="teacher-app-nav-link" type="button" data-student-section="profile" aria-selected="false">
+              <span class="teacher-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M5 20a7 7 0 0 1 14 0"></path></svg>
+              </span>
+              <span>My Profile</span>
+            </button>
+            <button class="teacher-app-nav-link" id="student-logout" type="button">
+              <span class="teacher-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>
+              </span>
+              <span>Log Out</span>
+            </button>
+          </div>
+          <button class="teacher-sidebar-edge-toggle" type="button" data-student-sidebar-toggle aria-controls="student-dashboard-sidebar" aria-expanded="false" aria-label="Fold sidebar">&lt;</button>
+        </aside>
+
+        <button class="teacher-sidebar-backdrop" id="student-sidebar-backdrop" type="button" aria-label="Close navigation"></button>
+
+        <div class="teacher-dashboard-main">
+          <header class="teacher-dashboard-topbar student-dashboard-topbar">
+            <div>
+              <p class="teacher-topbar-kicker">Student Dashboard</p>
+              <h1 class="teacher-topbar-title">Student Portal</h1>
+              <p class="portal-sub student-dashboard-topbar-copy">Book lessons, track progress, and stay connected with your teacher.</p>
+            </div>
+            <div class="teacher-topbar-tools student-topbar-tools">
+              <div class="teacher-topbar-identity">
+                <strong id="student-topbar-name">Student</strong>
+                <span id="student-topbar-track">Learning path</span>
+              </div>
+              <button class="teacher-menu-toggle" id="student-sidebar-toggle" type="button" data-student-sidebar-toggle aria-controls="student-dashboard-sidebar" aria-expanded="false" aria-label="Toggle navigation">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 7h16"></path>
+                  <path d="M4 12h16"></path>
+                  <path d="M4 17h16"></path>
+                </svg>
               </button>
             </div>
-            <span id="student-focus-summary" hidden></span>
-          </article>
-        </section>
+          </header>
 
-        <section class="student-home-actions">
-          <div class="student-section-cards" id="student-portal-nav" aria-label="Student portal sections">
-            <button class="student-section-card active" type="button" data-student-section="book" aria-selected="true">
-              <strong>Book Lesson</strong>
-              <span>Pick date and time</span>
-            </button>
-            <button class="student-section-card" type="button" data-student-section="lessons" aria-selected="false">
-              <strong>My Lessons</strong>
-              <span>Pay, join, or cancel</span>
-            </button>
-            <button class="student-section-card" type="button" data-student-section="progress" aria-selected="false">
-              <strong>Progress</strong>
-              <span>Track your learning</span>
-            </button>
-            <button class="student-section-card" type="button" data-student-section="community" aria-selected="false">
-              <strong>Community</strong>
-              <span>Set up your profile</span>
-            </button>
-          </div>
+          <section class="student-status-wrap">
+            <article class="dashboard-card student-status-bar">
+              <div class="student-status-intro">
+                <span class="section-kicker">Student Portal</span>
+                <h2 id="student-dashboard-title">Welcome back</h2>
+                <p class="portal-sub" id="student-summary-caption">Your next step is always visible here.</p>
+              </div>
 
-          <div class="student-home-links">
-            <a href="my-profile.html" class="btn-outline portal-link">My Profile</a>
-            <button class="btn-outline portal-link" id="student-logout" type="button">Log Out</button>
-          </div>
-        </section>
+              <div class="student-status-metrics">
+                <article class="student-status-item">
+                  <span>Next lesson</span>
+                  <strong id="student-next-lesson-summary">No lesson booked</strong>
+                </article>
+                <article class="student-status-item">
+                  <span>Payment</span>
+                  <strong id="student-payment-summary">Waiting for booking</strong>
+                </article>
+                <button
+                  class="list-action meet student-join-meeting student-status-join-btn"
+                  id="student-status-join"
+                  type="button"
+                  data-booking-id=""
+                  data-lesson-date=""
+                  data-lesson-time=""
+                  hidden
+                  disabled
+                >
+                  Join Meeting
+                </button>
+              </div>
+              <span id="student-focus-summary" hidden></span>
+            </article>
+          </section>
 
-        <section class="student-portal-section active" id="student-section-book">
+          <section class="student-portal-section active" id="student-section-book">
           <section class="portal-grid portal-grid-full" id="student-booking-section">
             <article class="dashboard-card">
               <div class="card-heading">
@@ -162,7 +225,7 @@
           </section>
         </section>
 
-        <section class="student-portal-section" id="student-section-lessons" hidden>
+          <section class="student-portal-section" id="student-section-lessons" hidden>
           <section class="portal-grid portal-grid-full">
             <article class="dashboard-card">
               <div class="card-heading">
@@ -176,7 +239,7 @@
           </section>
         </section>
 
-        <section class="student-portal-section" id="student-section-progress" hidden>
+          <section class="student-portal-section" id="student-section-progress" hidden>
           <section class="portal-grid portal-grid-top">
             <article class="dashboard-card stat-card">
               <span class="stat-kicker">Track</span>
@@ -235,21 +298,9 @@
               <p class="note-card" id="student-note"></p>
             </article>
           </section>
-
-          <section class="portal-grid portal-grid-wide">
-            <article class="dashboard-card">
-              <div class="card-heading">
-                <div>
-                  <h2>Lesson History</h2>
-                  <p class="portal-sub">Your completed lessons.</p>
-                </div>
-              </div>
-              <div class="stack-list" id="student-history"></div>
-            </article>
-          </section>
         </section>
 
-        <section class="student-portal-section" id="student-section-community" hidden>
+          <section class="student-portal-section" id="student-section-community" hidden>
           <section class="portal-grid portal-grid-full">
             <article class="dashboard-card">
               <div class="card-heading">
@@ -258,7 +309,7 @@
                   <p class="portal-sub">Set up your profile now and be ready for upcoming community features.</p>
                 </div>
                 <div class="portal-shortcuts portal-shortcuts-tight">
-                  <a href="my-profile.html" class="btn-outline portal-link">Open My Profile</a>
+                  <button class="btn-outline portal-link" type="button" data-student-section-trigger="profile">Open My Profile</button>
                 </div>
               </div>
               <p class="note-card">
@@ -267,6 +318,161 @@
             </article>
           </section>
         </section>
+
+          <section class="student-portal-section" id="student-section-profile" hidden>
+          <section class="portal-grid portal-grid-full">
+            <article class="dashboard-card">
+              <div class="card-heading">
+                <div>
+                  <h2>My Profile</h2>
+                  <p class="portal-sub">Manage the details that personalize your lessons and student experience.</p>
+                </div>
+              </div>
+
+              <div class="portal-profile-layout">
+                <div class="portal-profile-avatar-wrap">
+                  <label for="student-profile-avatar-url">Profile photo URL</label>
+                  <img
+                    id="student-profile-avatar-preview"
+                    class="portal-profile-avatar"
+                    src=""
+                    alt="Student profile preview"
+                  >
+                  <input
+                    type="url"
+                    id="student-profile-avatar-url"
+                    placeholder="https://example.com/photo.jpg"
+                  >
+                  <p class="field-note">Add a public image URL if you want a photo on your student profile card.</p>
+                </div>
+
+                <div>
+                  <div class="portal-profile-grid">
+                    <div class="form-group">
+                      <label for="student-profile-name-input">Full name</label>
+                      <input type="text" id="student-profile-name-input" maxlength="80" placeholder="Your full name">
+                    </div>
+
+                    <div class="form-group">
+                      <label for="student-profile-timezone-input">Timezone</label>
+                      <select id="student-profile-timezone-input">
+                        <option value="">Choose your timezone</option>
+                        <option value="Europe/London">London (GMT / BST)</option>
+                        <option value="Europe/Paris">Paris (CET / CEST)</option>
+                        <option value="Europe/Madrid">Madrid (CET / CEST)</option>
+                        <option value="Europe/Berlin">Berlin (CET / CEST)</option>
+                        <option value="America/New_York">New York (ET)</option>
+                        <option value="America/Chicago">Chicago (CT)</option>
+                        <option value="America/Denver">Denver (MT)</option>
+                        <option value="America/Los_Angeles">Los Angeles (PT)</option>
+                        <option value="America/Toronto">Toronto (ET)</option>
+                        <option value="America/Mexico_City">Mexico City (CT)</option>
+                        <option value="America/Sao_Paulo">Sao Paulo (BRT)</option>
+                        <option value="Asia/Dubai">Dubai (GST)</option>
+                        <option value="Asia/Kolkata">India (IST)</option>
+                        <option value="Asia/Singapore">Singapore (SGT)</option>
+                        <option value="Asia/Tokyo">Tokyo (JST)</option>
+                        <option value="Australia/Sydney">Sydney (AEST / AEDT)</option>
+                        <option value="Pacific/Auckland">Auckland (NZST / NZDT)</option>
+                        <option value="other">I am not sure yet</option>
+                      </select>
+                    </div>
+
+                    <div class="form-group">
+                      <label for="student-profile-track-input">Track</label>
+                      <input type="text" id="student-profile-track-input" maxlength="80" placeholder="e.g. 1-on-1">
+                    </div>
+
+                    <div class="form-group">
+                      <label for="student-profile-goal-input">Goal</label>
+                      <select id="student-profile-goal-input">
+                        <option value="">Choose your main goal</option>
+                        <option value="Travel">Travel confidently</option>
+                        <option value="Work">Speak Spanish for work</option>
+                        <option value="Conversation">Improve conversation fluency</option>
+                        <option value="Confidence">Build speaking confidence</option>
+                        <option value="Exams">Prepare for exams or school</option>
+                        <option value="Relocation">Move to a Spanish-speaking country</option>
+                        <option value="Family">Speak with family or a partner</option>
+                        <option value="Beginner">Build a strong beginner foundation</option>
+                        <option value="Free trial lesson">Free trial lesson</option>
+                        <option value="Not sure">I am not sure yet</option>
+                      </select>
+                    </div>
+
+                    <div class="form-group">
+                      <label for="student-profile-languages-input">Languages you know</label>
+                      <input
+                        type="text"
+                        id="student-profile-languages-input"
+                        maxlength="160"
+                        placeholder="e.g. English, Spanish, French"
+                      >
+                    </div>
+
+                    <div class="form-group">
+                      <label for="student-profile-occupation-input">Occupation</label>
+                      <input type="text" id="student-profile-occupation-input" maxlength="120" placeholder="e.g. Student, designer, nurse">
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label>Hobbies</label>
+                    <div class="student-hobby-picker" id="student-profile-hobbies-picker" aria-label="Choose your hobbies"></div>
+                    <p class="student-hobby-picker-summary" id="student-profile-hobbies-count">Choose at least 3 hobbies.</p>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="student-profile-interests-input">Interests</label>
+                    <textarea
+                      id="student-profile-interests-input"
+                      maxlength="600"
+                      placeholder="What topics or real-life situations should your lessons connect with?"
+                    ></textarea>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="student-profile-personality-input">Personality and learning style</label>
+                    <textarea
+                      id="student-profile-personality-input"
+                      maxlength="600"
+                      placeholder="Tell your teacher how you learn best, what helps your confidence, and what usually blocks you."
+                    ></textarea>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="student-profile-notes-input">Notes for your teacher</label>
+                    <textarea
+                      id="student-profile-notes-input"
+                      maxlength="1000"
+                      placeholder="Share anything useful about your goals, confidence, or lesson focus."
+                    ></textarea>
+                  </div>
+
+                  <button class="btn-submit" id="student-profile-save" type="button">Save Profile</button>
+                  <div id="student-profile-feedback" class="booking-feedback" hidden></div>
+                </div>
+              </div>
+            </article>
+          </section>
+        </section>
+
+          <section class="student-portal-section" id="student-section-messages" hidden>
+          <section class="portal-grid portal-grid-full">
+            <article class="dashboard-card">
+              <div class="card-heading">
+                <div>
+                  <h2>Messages</h2>
+                  <p class="portal-sub">Direct chat with your teacher.</p>
+                </div>
+              </div>
+              <div id="student-messages-container">
+                <p class="empty-copy student-messages-loading-copy">Loading messages...</p>
+              </div>
+            </article>
+          </section>
+          </section>
+        </div>
       </div>
 
       <div class="booking-modal" id="student-setup-modal" hidden>
@@ -330,6 +536,40 @@
                 <option value="Free trial lesson">Free trial lesson</option>
                 <option value="Not sure">I am not sure yet</option>
               </select>
+            </div>
+            <div class="form-group">
+              <label for="student-setup-languages">Languages you know</label>
+              <input
+                type="text"
+                id="student-setup-languages"
+                maxlength="160"
+                placeholder="e.g. English, Spanish, French"
+              >
+            </div>
+            <div class="form-group">
+              <label for="student-setup-occupation">Occupation</label>
+              <input type="text" id="student-setup-occupation" maxlength="120" placeholder="e.g. Student, engineer, marketer">
+            </div>
+            <div class="form-group">
+              <label>Hobbies</label>
+              <div class="student-hobby-picker" id="student-setup-hobbies-picker" aria-label="Choose your hobbies"></div>
+              <p class="student-hobby-picker-summary" id="student-setup-hobbies-count">Choose at least 3 hobbies.</p>
+            </div>
+            <div class="form-group">
+              <label for="student-setup-interests">Interests</label>
+              <textarea
+                id="student-setup-interests"
+                maxlength="600"
+                placeholder="What topics or situations should your lessons include?"
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label for="student-setup-personality">Personality and learning style</label>
+              <textarea
+                id="student-setup-personality"
+                maxlength="600"
+                placeholder="How do you learn best, and what should your teacher know about your style?"
+              ></textarea>
             </div>
           </div>
 

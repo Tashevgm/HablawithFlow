@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teacher Dashboard | Hablawithflow</title>
+  <title>Teacher Calendar | Hablawithflow</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -31,11 +31,11 @@
         <p class="teacher-sidebar-section-label">Menu</p>
 
         <nav class="teacher-sidebar-nav" aria-label="Teacher navigation links">
-          <a class="teacher-app-nav-link active" href="admin.html" aria-current="page">
+          <a class="teacher-app-nav-link" href="admin.html">
             <span class="teacher-nav-icon" aria-hidden="true">D</span>
             <span>Dashboard</span>
           </a>
-          <a class="teacher-app-nav-link" href="teacher-calendar.html">
+          <a class="teacher-app-nav-link active" href="teacher-calendar.html" aria-current="page">
             <span class="teacher-nav-icon" aria-hidden="true">C</span>
             <span>Calendar</span>
           </a>
@@ -74,8 +74,8 @@
       <div class="teacher-dashboard-main">
         <header class="teacher-dashboard-topbar">
           <div>
-            <p class="teacher-topbar-kicker">Daily Overview</p>
-            <h1 class="teacher-topbar-title">Teacher Dashboard</h1>
+            <p class="teacher-topbar-kicker">Editable Calendar</p>
+            <h1 class="teacher-topbar-title">Calendar</h1>
           </div>
           <div class="teacher-topbar-tools">
             <span class="teacher-date-chip" id="teacher-dashboard-date">Date</span>
@@ -91,66 +91,104 @@
 
         <div class="form-error teacher-dashboard-error" id="slot-error" hidden></div>
 
-        <section class="teacher-page-hero-card">
+        <section class="teacher-page-hero-card compact">
           <div class="teacher-page-hero-copy">
-            <span class="teacher-page-eyebrow">Simple Main Page</span>
-            <h2 id="teacher-home-greeting-title">Buenas tardes, Teacher.</h2>
-            <p id="teacher-home-greeting-subtitle">
-              Your most important teaching information lives here: next lessons, calendar visibility, and follow-ups.
-            </p>
+            <span class="teacher-page-eyebrow">Availability</span>
+            <h2>Control your week without extra clutter.</h2>
+            <p>Open slots and shape your week from one screen.</p>
           </div>
-          <div class="teacher-home-stat-grid">
+          <div class="teacher-home-stat-grid calendar-stats-grid">
             <article class="teacher-home-stat-card">
-              <span>Today</span>
-              <strong id="teacher-home-stat-today">0</strong>
-              <small>Lessons left today</small>
-            </article>
-            <article class="teacher-home-stat-card">
-              <span>Upcoming</span>
-              <strong id="teacher-home-stat-bookings">0</strong>
-              <small>Confirmed upcoming lessons</small>
+              <span>Bookings</span>
+              <strong id="stat-bookings">0</strong>
+              <small>Upcoming active bookings</small>
             </article>
             <article class="teacher-home-stat-card">
               <span>Students</span>
-              <strong id="teacher-home-stat-students">0</strong>
-              <small>Active learners</small>
-            </article>
-            <article class="teacher-home-stat-card">
-              <span>Open Slots</span>
-              <strong id="teacher-home-stat-open-slots">0</strong>
-              <small>Available times to book</small>
-            </article>
-            <article class="teacher-home-stat-card accent">
-              <span>Pending</span>
-              <strong id="teacher-home-stat-pending">0</strong>
-              <small>Payments needing review</small>
+              <strong id="stat-students">0</strong>
+              <small>Learners in the portal</small>
             </article>
           </div>
         </section>
 
-        <section class="teacher-home-layout">
+        <section class="teacher-home-layout teacher-calendar-workspace">
           <article class="teacher-panel teacher-panel-large">
             <div class="teacher-panel-heading">
               <div>
-                <span class="section-kicker">Calendar</span>
-                <h3>Today's schedule</h3>
+                <span class="section-kicker">Planner</span>
+                <h3>Availability editor</h3>
               </div>
-              <a class="btn-outline" href="teacher-calendar.html">Open calendar</a>
             </div>
-            <div class="teacher-week-preview-grid" id="teacher-week-preview-grid"></div>
-          </article>
 
-          <article class="teacher-panel teacher-panel-narrow">
-            <div class="teacher-panel-heading">
-              <div>
-                <span class="section-kicker">Next Lessons</span>
-                <h3>What is coming up</h3>
+            <section class="bulk-layout teacher-bulk-panel" aria-label="Bulk open availability">
+              <div class="teacher-bulk-header">
+                <div>
+                  <span class="section-kicker">Bulk Open</span>
+                  <h4>Open recurring slots in one action</h4>
+                </div>
+                <p>Apply 30-minute availability across a date range and selected weekdays.</p>
+              </div>
+
+              <div class="bulk-grid">
+                <div class="form-group">
+                  <label class="field-label" for="bulk-date-from">Start date</label>
+                  <input id="bulk-date-from" type="date">
+                </div>
+                <div class="form-group">
+                  <label class="field-label" for="bulk-date-to">End date</label>
+                  <input id="bulk-date-to" type="date">
+                </div>
+                <div class="form-group">
+                  <label class="field-label" for="bulk-time-start">Start time</label>
+                  <input id="bulk-time-start" type="time" min="08:00" max="20:00" step="1800" value="08:00">
+                </div>
+                <div class="form-group">
+                  <label class="field-label" for="bulk-time-end">End time</label>
+                  <input id="bulk-time-end" type="time" min="08:00" max="20:00" step="1800" value="17:00">
+                </div>
+              </div>
+
+              <div class="bulk-days">
+                <span class="field-label">Weekdays</span>
+                <div class="weekday-row" id="bulk-weekday-row">
+                  <label class="weekday-pill"><input type="checkbox" value="1" checked> Mon</label>
+                  <label class="weekday-pill"><input type="checkbox" value="2" checked> Tue</label>
+                  <label class="weekday-pill"><input type="checkbox" value="3" checked> Wed</label>
+                  <label class="weekday-pill"><input type="checkbox" value="4" checked> Thu</label>
+                  <label class="weekday-pill"><input type="checkbox" value="5" checked> Fri</label>
+                  <label class="weekday-pill"><input type="checkbox" value="6"> Sat</label>
+                  <label class="weekday-pill"><input type="checkbox" value="0"> Sun</label>
+                </div>
+              </div>
+
+              <div class="bulk-actions">
+                <button class="btn-outline" id="bulk-use-visible-week" type="button">Use visible week</button>
+                <button class="btn-outline" id="bulk-preset-weekdays" type="button">Weekdays 8:00-17:00</button>
+                <button class="btn-submit bulk-submit" id="bulk-add" type="button">Open matching slots</button>
+              </div>
+
+              <p class="bulk-summary">Creates every 30-minute slot in the selected range. The end time is included.</p>
+            </section>
+
+            <div class="calendar-legend">
+              <span><i class="legend-dot open"></i> Open</span>
+              <span><i class="legend-dot reserved"></i> Reserved</span>
+              <span><i class="legend-dot booked"></i> Paid</span>
+              <span><i class="legend-dot empty"></i> Unavailable</span>
+            </div>
+
+            <div class="calendar-view active" id="calendar-view-week">
+              <div class="calendar-toolbar">
+                <button class="btn-outline calendar-nav" id="calendar-prev" type="button">Previous Week</button>
+                <div class="calendar-range" id="calendar-range"></div>
+                <button class="btn-outline calendar-nav" id="calendar-next" type="button">Next Week</button>
+              </div>
+              <div class="calendar-shell">
+                <div class="calendar-grid" id="availability-calendar"></div>
               </div>
             </div>
-            <div class="teacher-upnext-list" id="teacher-home-up-next-list"></div>
           </article>
         </section>
-
       </div>
     </div>
   </main>

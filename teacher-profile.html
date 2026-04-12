@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Profile | Hablawithflow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body class="portal-app teacher-dashboard-app teacher-portal-v2">
+  <main class="teacher-dashboard-shell">
+    <div id="admin-dashboard" class="teacher-dashboard-app-shell" hidden>
+      <aside class="teacher-dashboard-sidebar" id="teacher-dashboard-sidebar" aria-label="Teacher navigation">
+        <div class="teacher-sidebar-brand">
+          <div class="teacher-sidebar-brand-row">
+            <div class="teacher-sidebar-brand-copy">
+              <div class="teacher-sidebar-logo" aria-label="Teacher profile">
+                <span>Hablawithflow</span>
+              </div>
+              <span class="teacher-sidebar-kicker">Teacher Portal</span>
+            </div>
+            <button class="teacher-sidebar-brand-toggle" type="button" data-sidebar-toggle aria-controls="teacher-dashboard-sidebar" aria-expanded="false" aria-label="Fold sidebar">&lt;</button>
+          </div>
+        </div>
+
+        <p class="teacher-sidebar-section-label">Menu</p>
+
+        <nav class="teacher-sidebar-nav" aria-label="Teacher navigation links">
+          <a class="teacher-app-nav-link" href="admin.html">
+            <span class="teacher-nav-icon" aria-hidden="true">D</span>
+            <span>Dashboard</span>
+          </a>
+          <a class="teacher-app-nav-link" href="teacher-calendar.html">
+            <span class="teacher-nav-icon" aria-hidden="true">C</span>
+            <span>Calendar</span>
+          </a>
+          <a class="teacher-app-nav-link" href="teacher-students.html">
+            <span class="teacher-nav-icon" aria-hidden="true">S</span>
+            <span>Students</span>
+          </a>
+          <a class="teacher-app-nav-link" href="messages.html">
+            <span class="teacher-nav-icon" aria-hidden="true">M</span>
+            <span>Messages</span>
+          </a>
+          <a class="teacher-app-nav-link" href="teacher-wallet.html">
+            <span class="teacher-nav-icon" aria-hidden="true">W</span>
+            <span>Wallet</span>
+          </a>
+          <a class="teacher-app-nav-link active" href="teacher-profile.html" aria-current="page">
+            <span class="teacher-nav-icon" aria-hidden="true">P</span>
+            <span>Profile</span>
+          </a>
+          <a class="teacher-app-nav-link" href="teacher-settings.html">
+            <span class="teacher-nav-icon" aria-hidden="true">SE</span>
+            <span>Settings</span>
+          </a>
+        </nav>
+
+        <div class="teacher-sidebar-footer">
+          <button class="teacher-app-nav-link" type="button" id="teacher-logout">
+            <span class="teacher-nav-icon" aria-hidden="true">LO</span>
+            <span>Log Out</span>
+          </button>
+        </div>
+        <button class="teacher-sidebar-edge-toggle" type="button" data-sidebar-toggle aria-controls="teacher-dashboard-sidebar" aria-expanded="false" aria-label="Fold sidebar">&lt;</button>
+      </aside>
+      <button class="teacher-sidebar-backdrop" id="teacher-sidebar-backdrop" type="button" aria-label="Close navigation"></button>
+
+      <div class="teacher-dashboard-main">
+        <header class="teacher-dashboard-topbar">
+          <div>
+            <p class="teacher-topbar-kicker">Public Teacher Bio</p>
+            <h1 class="teacher-topbar-title">Profile</h1>
+          </div>
+          <div class="teacher-topbar-tools">
+            <span class="teacher-date-chip" id="teacher-dashboard-date">Date</span>
+            <div class="teacher-topbar-identity">
+              <strong id="teacher-topbar-name">Teacher</strong>
+              <span id="teacher-topbar-role">Educator</span>
+            </div>
+            <button class="teacher-avatar-toggle" type="button" data-sidebar-toggle aria-controls="teacher-dashboard-sidebar" aria-expanded="false" aria-label="Toggle navigation">
+              <img id="teacher-sidebar-avatar-image" data-teacher-avatar src="https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=200&q=80" alt="Teacher profile">
+            </button>
+          </div>
+        </header>
+
+        <section class="teacher-home-layout teacher-profile-layout-page">
+          <article class="teacher-panel teacher-panel-narrow teacher-profile-preview-card">
+            <div class="teacher-profile-preview-surface">
+              <img
+                id="teacher-profile-avatar-preview"
+                class="teacher-profile-preview-avatar"
+                src="https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80"
+                alt="Teacher profile avatar"
+              >
+              <div class="teacher-profile-preview-copy">
+                <span class="section-kicker">Student-facing preview</span>
+                <h2 id="teacher-profile-summary-name">Teacher profile</h2>
+                <p id="teacher-profile-summary-email">No email loaded</p>
+                <p id="teacher-profile-summary-meta">Timezone not set yet</p>
+              </div>
+              <div class="teacher-profile-preview-extra">
+                <h3 id="teacher-profile-preview-headline">Warm, modern Spanish teaching.</h3>
+                <p id="teacher-profile-preview-bio">
+                  Add a rich introduction so students understand your style, background, and what lessons with you feel like.
+                </p>
+                <div class="teacher-profile-preview-tags" id="teacher-profile-preview-tags"></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="teacher-panel teacher-panel-large">
+            <div class="teacher-panel-heading">
+              <div>
+                <span class="section-kicker">Editable profile</span>
+                <h3>Tell students who is teaching them</h3>
+              </div>
+            </div>
+
+            <div class="teacher-form-grid">
+              <div class="form-group">
+                <label for="teacher-profile-name">Full name</label>
+                <input type="text" id="teacher-profile-name" maxlength="80">
+              </div>
+              <div class="form-group">
+                <label for="teacher-profile-email">Email</label>
+                <input type="email" id="teacher-profile-email" readonly>
+              </div>
+              <div class="form-group">
+                <label for="teacher-profile-timezone">Timezone</label>
+                <input type="text" id="teacher-profile-timezone" maxlength="80" placeholder="e.g. Europe/London">
+              </div>
+              <div class="form-group">
+                <label for="teacher-profile-role">Role</label>
+                <input type="text" id="teacher-profile-role" readonly>
+              </div>
+              <div class="form-group">
+                <label for="teacher-profile-avatar-url">Profile picture URL</label>
+                <input type="url" id="teacher-profile-avatar-url" placeholder="https://...">
+              </div>
+              <div class="form-group">
+                <label for="teacher-profile-hourly-rate">Hourly rate</label>
+                <input type="number" id="teacher-profile-hourly-rate" min="0" step="0.01" placeholder="20">
+              </div>
+            </div>
+
+            <div class="teacher-form-grid teacher-form-grid-two">
+              <div class="form-group">
+                <label for="teacher-profile-headline">Headline</label>
+                <input type="text" id="teacher-profile-headline" maxlength="120" placeholder="Conversation-first Spanish coach for busy adults">
+              </div>
+              <div class="form-group">
+                <label for="teacher-profile-location">Location</label>
+                <input type="text" id="teacher-profile-location" maxlength="120" placeholder="London, UK">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="teacher-profile-bio">About you</label>
+              <textarea id="teacher-profile-bio" maxlength="1200" placeholder="Share your story, your energy in class, and how you help students feel confident."></textarea>
+            </div>
+
+            <div class="teacher-form-grid teacher-form-grid-two">
+              <div class="form-group">
+                <label for="teacher-profile-languages">Languages</label>
+                <input type="text" id="teacher-profile-languages" placeholder="Spanish, English, Italian">
+              </div>
+              <div class="form-group">
+                <label for="teacher-profile-specialties">Specialties</label>
+                <input type="text" id="teacher-profile-specialties" placeholder="Speaking confidence, pronunciation, business Spanish">
+              </div>
+            </div>
+
+            <div class="teacher-form-grid teacher-form-grid-two">
+              <div class="form-group">
+                <label for="teacher-profile-teaching-style">Teaching style</label>
+                <textarea id="teacher-profile-teaching-style" placeholder="How you teach, how you pace lessons, what students can expect."></textarea>
+              </div>
+              <div class="form-group">
+                <label for="teacher-profile-certifications">Certifications and experience</label>
+                <textarea id="teacher-profile-certifications" placeholder="Years teaching, qualifications, industries, specialties."></textarea>
+              </div>
+            </div>
+
+            <div class="teacher-form-grid teacher-form-grid-two">
+              <div class="form-group">
+                <label for="teacher-profile-fun-facts">Fun facts and hobbies</label>
+                <textarea id="teacher-profile-fun-facts" placeholder="Music, travel, hobbies, little details that help students connect with you."></textarea>
+              </div>
+              <div class="form-group">
+                <label for="teacher-profile-availability-notes">Availability notes</label>
+                <textarea id="teacher-profile-availability-notes" placeholder="Best times for classes, preferred student types, lesson preparation notes."></textarea>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="teacher-profile-video-url">Intro video URL</label>
+              <input type="url" id="teacher-profile-video-url" placeholder="https://...">
+            </div>
+
+            <div class="teacher-profile-actions">
+              <button class="btn-submit" id="teacher-profile-save" type="button">Save Teacher Profile</button>
+              <div id="teacher-profile-feedback" class="booking-feedback" hidden></div>
+            </div>
+          </article>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/js/supabase-client.js"></script>
+  <script src="assets/js/app-config.js"></script>
+  <script src="assets/js/legal-consent.js"></script>
+  <script src="assets/js/email-api.js"></script>
+  <script src="assets/js/portal-data.js"></script>
+  <script src="assets/js/admin-portal.js"></script>
+</body>
+</html>
+

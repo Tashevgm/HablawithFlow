@@ -17,12 +17,147 @@ let studentMeetingEnableMinutesBefore = 15;
 let studentMeetingTickerId = 0;
 let studentMeetingConfigured = false;
 let studentMeetingDynamicPerBooking = false;
+let studentSidebarBound = false;
+let studentMessagesConversationId = "";
+let studentMessagesPartner = null;
+let studentMessagesSubscription = null;
+let studentMessagesRefreshTimerId = 0;
+let studentMessagesBound = false;
+let studentHobbyPickerBound = false;
 const TEACHER_PORTAL_ROLES = new Set(["teacher", "admin"]);
 const DEFAULT_PROFILE_AVATAR =
   "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80";
+const STUDENT_HOBBY_OPTIONS = [
+  "Travel",
+  "Music",
+  "Fitness",
+  "Cooking",
+  "Reading",
+  "Movies",
+  "Dancing",
+  "Art",
+  "Photography",
+  "Nature",
+  "Hiking",
+  "Coffee",
+  "Food",
+  "Languages",
+  "Technology",
+  "Business",
+  "Fashion",
+  "Yoga",
+  "Gaming",
+  "Sports",
+  "Podcasts",
+  "Writing",
+  "Pets",
+  "Culture"
+];
 
 function hasText(value) {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function splitStudentCsvText(value, limit = 12) {
+  return String(value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function joinStudentCsvText(values) {
+  return Array.isArray(values) ? values.filter(Boolean).join(", ") : "";
+}
+
+function isMissingSupabaseTableError(error, tableName) {
+  const message = String(error?.message || "").toLowerCase();
+  const normalizedTable = String(tableName || "").toLowerCase();
+
+  return Boolean(normalizedTable) && message.includes(normalizedTable) && (
+    message.includes("schema cache") ||
+    message.includes("does not exist") ||
+    message.includes("relation") ||
+    message.includes("table")
+  );
+}
+
+function normalizeStudentHobbySelection(value) {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.map((entry) => String(entry || "").trim()).filter(Boolean)));
+  }
+
+  return Array.from(new Set(splitStudentCsvText(value, STUDENT_HOBBY_OPTIONS.length)));
+}
+
+function buildStudentHobbyPickerMarkup(context, selectedValues = []) {
+  const selectedSet = new Set(normalizeStudentHobbySelection(selectedValues));
+
+  return STUDENT_HOBBY_OPTIONS.map((option) => {
+    const isSelected = selectedSet.has(option);
+    return `
+      <button
+        class="student-hobby-chip${isSelected ? " active" : ""}"
+        type="button"
+        data-student-hobby-context="${context}"
+        data-student-hobby-value="${option}"
+        aria-pressed="${isSelected ? "true" : "false"}"
+      >
+        ${option}
+      </button>
+    `;
+  }).join("");
+}
+
+function getSelectedStudentHobbies(context) {
+  return Array.from(document.querySelectorAll(`[data-student-hobby-context="${context}"]`))
+    .filter((button) => button.classList.contains("active"))
+    .map((button) => String(button.getAttribute("data-student-hobby-value") || "").trim())
+    .filter(Boolean);
+}
+
+function updateStudentHobbyPickerSummary(context) {
+  const summary = byId(`student-${context}-hobbies-count`);
+  if (!summary) {
+    return;
+  }
+
+  const selectedCount = getSelectedStudentHobbies(context).length;
+  summary.textContent =
+    selectedCount >= 3
+      ? `${selectedCount} hobbies selected.`
+      : `Choose at least 3 hobbies. ${selectedCount}/3 selected.`;
+  summary.classList.toggle("ready", selectedCount >= 3);
+}
+
+function renderStudentHobbyPicker(context, selectedValues = []) {
+  const container = byId(`student-${context}-hobbies-picker`);
+  if (!container) {
+    return;
+  }
+
+  container.innerHTML = buildStudentHobbyPickerMarkup(context, selectedValues);
+  updateStudentHobbyPickerSummary(context);
+}
+
+function bindStudentHobbyPickers() {
+  if (studentHobbyPickerBound) {
+    return;
+  }
+
+  document.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest("[data-student-hobby-context]") : null;
+    if (!button) {
+      return;
+    }
+
+    event.preventDefault();
+    button.classList.toggle("active");
+    button.setAttribute("aria-pressed", button.classList.contains("active") ? "true" : "false");
+    updateStudentHobbyPickerSummary(String(button.getAttribute("data-student-hobby-context") || ""));
+  });
+
+  studentHobbyPickerBound = true;
 }
 
 function byId(id) {
@@ -395,6 +530,303 @@ async function loadSupabaseProfile(user) {
   };
 }
 
+function buildStudentPersonalizationFromSources({ personalizationRow, metadata, fallbackGoal = "" }) {
+  const learningGoal = String(personalizationRow?.learning_goal || metadata.student_learning_goal || metadata.goal || fallbackGoal || "").trim();
+  const occupation = String(personalizationRow?.occupation || metadata.student_occupation || "").trim();
+  const hobbies = String(personalizationRow?.hobbies || metadata.student_hobbies || "").trim();
+  const interests = String(personalizationRow?.interests || metadata.student_interests || "").trim();
+  const personalityNotes = String(personalizationRow?.personality_notes || metadata.student_personality_notes || "").trim();
+
+  return {
+    learning_goal: learningGoal || null,
+    occupation: occupation || null,
+    hobbies: hobbies || null,
+    interests: interests || null,
+    personality_notes: personalityNotes || null
+  };
+}
+
+function hasStudentPersonalizationData(personalization) {
+  return Boolean(
+    hasText(personalization?.learning_goal) ||
+      hasText(personalization?.occupation) ||
+      hasText(personalization?.hobbies) ||
+      hasText(personalization?.interests) ||
+      hasText(personalization?.personality_notes)
+  );
+}
+
+async function loadStudentExtendedProfile(student) {
+  const metadata = currentSupabaseUser?.user_metadata || {};
+  const userId = String(currentSupabaseUserId || student?.id || "").trim();
+  const studentEmail = String(currentSupabaseUser?.email || student?.email || "").trim().toLowerCase();
+
+  let communityProfileRow = null;
+  let personalizationRow = null;
+
+  if (window.supabaseClient && userId) {
+    const [communityProfileResult, personalizationResult] = await Promise.all([
+      window.supabaseClient
+        .from("community_profiles")
+        .select("languages, avatar_url")
+        .eq("id", userId)
+        .maybeSingle(),
+      studentEmail
+        ? window.supabaseClient
+            .from("student_personalization_profiles")
+            .select("learning_goal, occupation, hobbies, interests, personality_notes")
+            .eq("student_email", studentEmail)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null })
+    ]);
+
+    if (!communityProfileResult.error || !isMissingSupabaseTableError(communityProfileResult.error, "community_profiles")) {
+      communityProfileRow = communityProfileResult.data || null;
+    }
+
+    if (!personalizationResult.error || !isMissingSupabaseTableError(personalizationResult.error, "student_personalization_profiles")) {
+      personalizationRow = personalizationResult.data || null;
+    }
+  }
+
+  const languagesFromCommunityProfile = Array.isArray(communityProfileRow?.languages)
+    ? communityProfileRow.languages.map((entry) => String(entry || "").trim()).filter(Boolean)
+    : [];
+  const languages = languagesFromCommunityProfile.length
+    ? languagesFromCommunityProfile
+    : splitStudentCsvText(metadata.community_languages || joinStudentCsvText(student?.languages || []));
+  const avatarUrl = String(communityProfileRow?.avatar_url || metadata.avatar_url || student?.avatarUrl || "").trim();
+  const personalization = buildStudentPersonalizationFromSources({
+    personalizationRow,
+    metadata,
+    fallbackGoal: student?.goal || ""
+  });
+
+  return {
+    languages,
+    avatarUrl,
+    personalization: hasStudentPersonalizationData(personalization) ? personalization : null
+  };
+}
+
+async function upsertStudentCommunityProfile({ displayName, avatarUrl, languages }) {
+  if (!window.supabaseClient || !currentSupabaseUserId) {
+    return { ok: false, error: new Error("Profile service is not available.") };
+  }
+
+  const existingResult = await window.supabaseClient
+    .from("community_profiles")
+    .select("headline, bio, location, avatar_url, is_public")
+    .eq("id", currentSupabaseUserId)
+    .maybeSingle();
+
+  if (existingResult.error) {
+    if (isMissingSupabaseTableError(existingResult.error, "community_profiles")) {
+      return { ok: true, setupMissing: true };
+    }
+
+    return { ok: false, error: existingResult.error };
+  }
+
+  const existingRow = existingResult.data || {};
+  const { error } = await window.supabaseClient.from("community_profiles").upsert(
+    {
+      id: currentSupabaseUserId,
+      display_name: String(displayName || "Student").trim() || "Student",
+      headline: String(existingRow.headline || "").trim(),
+      bio: String(existingRow.bio || "").trim(),
+      location: String(existingRow.location || "").trim(),
+      languages,
+      avatar_url: hasText(avatarUrl) ? avatarUrl : String(existingRow.avatar_url || "").trim() || null,
+      is_public: existingRow.is_public !== false
+    },
+    {
+      onConflict: "id"
+    }
+  );
+
+  if (error) {
+    if (isMissingSupabaseTableError(error, "community_profiles")) {
+      return { ok: true, setupMissing: true };
+    }
+
+    return { ok: false, error };
+  }
+
+  return { ok: true, setupMissing: false };
+}
+
+function getStudentProfileCompletionState({
+  fullName,
+  timezone,
+  track,
+  goal,
+  languages,
+  occupation,
+  hobbies,
+  interests,
+  personalityNotes,
+  forceProfileCompleted = false
+}) {
+  const existingProfileCompleted =
+    parseBooleanLike(currentSupabaseUser?.user_metadata?.profile_completed) ||
+    hasText(currentSupabaseUser?.user_metadata?.profile_completed_at);
+  const normalizedHobbies = normalizeStudentHobbySelection(hobbies);
+  const computedProfileCompleted =
+    hasText(fullName) &&
+    hasText(track) &&
+    hasText(goal) &&
+    hasText(timezone) &&
+    String(timezone || "").trim().toLowerCase() !== "other" &&
+    Array.isArray(languages) &&
+    languages.length > 0 &&
+    hasText(occupation) &&
+    normalizedHobbies.length >= 3 &&
+    hasText(interests) &&
+    hasText(personalityNotes);
+  const nextProfileCompleted = existingProfileCompleted || forceProfileCompleted || computedProfileCompleted;
+
+  return {
+    computedProfileCompleted,
+    nextProfileCompleted,
+    nextProfileCompletedAt: nextProfileCompleted
+      ? String(currentSupabaseUser?.user_metadata?.profile_completed_at || new Date().toISOString())
+      : ""
+  };
+}
+
+async function persistStudentProfileData({
+  fullName,
+  timezone,
+  track,
+  goal,
+  notes,
+  avatarUrl,
+  languagesText,
+  occupation,
+  hobbies,
+  interests,
+  personalityNotes,
+  forceProfileCompleted = false
+}) {
+  const normalizedFullName = String(fullName || "").trim();
+  const normalizedTimezone = String(timezone || "").trim() || "other";
+  const normalizedTrack = String(track || "").trim() || "1-on-1";
+  const normalizedGoal = String(goal || "").trim() || "Conversation";
+  const normalizedNotes = String(notes || "").trim();
+  const normalizedAvatarUrl = String(avatarUrl || "").trim();
+  const normalizedLanguages = splitStudentCsvText(languagesText);
+  const normalizedOccupation = String(occupation || "").trim();
+  const normalizedHobbies = normalizeStudentHobbySelection(hobbies);
+  const normalizedInterests = String(interests || "").trim();
+  const normalizedPersonalityNotes = String(personalityNotes || "").trim();
+
+  const completionState = getStudentProfileCompletionState({
+    fullName: normalizedFullName,
+    timezone: normalizedTimezone,
+    track: normalizedTrack,
+    goal: normalizedGoal,
+    languages: normalizedLanguages,
+    occupation: normalizedOccupation,
+    hobbies: normalizedHobbies,
+    interests: normalizedInterests,
+    personalityNotes: normalizedPersonalityNotes,
+    forceProfileCompleted
+  });
+
+  const { error: profileError } = await window.supabaseClient
+    .from("profiles")
+    .update({
+      full_name: normalizedFullName,
+      timezone: normalizedTimezone,
+      track: normalizedTrack,
+      goal: normalizedGoal,
+      notes: normalizedNotes
+    })
+    .eq("id", currentSupabaseUserId);
+
+  if (profileError) {
+    return {
+      ok: false,
+      error: profileError.message || "Could not save profile details."
+    };
+  }
+
+  const communityProfileResult = await upsertStudentCommunityProfile({
+    displayName: normalizedFullName,
+    avatarUrl: normalizedAvatarUrl,
+    languages: normalizedLanguages
+  });
+
+  if (!communityProfileResult.ok) {
+    return {
+      ok: false,
+      error: communityProfileResult.error?.message || "Could not save community profile details."
+    };
+  }
+
+  const metadataPayload = {
+    full_name: normalizedFullName,
+    timezone: normalizedTimezone,
+    track: normalizedTrack,
+    goal: normalizedGoal,
+    notes: normalizedNotes,
+    avatar_url: normalizedAvatarUrl,
+    community_languages: normalizedLanguages.join(", "),
+    student_learning_goal: normalizedGoal,
+    student_occupation: normalizedOccupation,
+    student_hobbies: normalizedHobbies.join(", "),
+    student_interests: normalizedInterests,
+    student_personality_notes: normalizedPersonalityNotes,
+    profile_completed: completionState.nextProfileCompleted,
+    profile_completed_at: completionState.nextProfileCompletedAt
+  };
+
+  const { error: authError } = await window.supabaseClient.auth.updateUser({
+    data: metadataPayload
+  });
+
+  if (authError) {
+    return {
+      ok: false,
+      error: authError.message || "Could not update profile metadata.",
+      communitySetupMissing: communityProfileResult.setupMissing
+    };
+  }
+
+  if (currentSupabaseUser) {
+    currentSupabaseUser = {
+      ...currentSupabaseUser,
+      user_metadata: {
+        ...(currentSupabaseUser.user_metadata || {}),
+        ...metadataPayload
+      }
+    };
+  }
+
+  return {
+    ok: true,
+    communitySetupMissing: communityProfileResult.setupMissing,
+    profileCompleted: completionState.nextProfileCompleted,
+    data: {
+      fullName: normalizedFullName,
+      timezone: normalizedTimezone,
+      track: normalizedTrack,
+      goal: normalizedGoal,
+      notes: normalizedNotes,
+      avatarUrl: normalizedAvatarUrl,
+      languages: normalizedLanguages,
+      personalization: {
+        learning_goal: normalizedGoal,
+        occupation: normalizedOccupation || null,
+        hobbies: normalizedHobbies.length ? normalizedHobbies.join(", ") : null,
+        interests: normalizedInterests || null,
+        personality_notes: normalizedPersonalityNotes || null
+      }
+    }
+  };
+}
+
 async function getPortalRoleForUser(user) {
   const metadataRole = String(user.user_metadata?.role || user.app_metadata?.role || "").toLowerCase();
   if (TEACHER_PORTAL_ROLES.has(metadataRole)) {
@@ -443,8 +875,10 @@ async function openStudentDashboardFromSession() {
     studentMeetingConfigured = false;
     studentMeetingDynamicPerBooking = false;
     studentMeetingJoinLink = "";
+    resetStudentMessagesState();
     await window.supabaseClient.auth.signOut();
     closeStudentSetupModal();
+    setStudentDashboardAppState(false);
     document.getElementById("student-dashboard").hidden = true;
     document.getElementById("student-login-card").hidden = false;
     document.getElementById("student-password").value = "";
@@ -464,6 +898,7 @@ async function openStudentDashboardFromSession() {
   document.getElementById("student-error").hidden = true;
   document.getElementById("student-login-card").hidden = true;
   document.getElementById("student-dashboard").hidden = false;
+  setStudentDashboardAppState(true);
   activeStudentPortalSection = "book";
   renderStudentDashboard(hydratedStudent);
   maybeOpenStudentSetupModal(hydratedStudent);
@@ -542,28 +977,56 @@ async function loadActiveServerBookingsForAvailability() {
 }
 
 function isAvailabilityBlockedByBooking(date, time) {
+  const candidateStart = parseLessonStart(date, time);
+  if (!candidateStart) {
+    return false;
+  }
+
+  const candidateEnd = new Date(candidateStart.getTime() + 60 * 60 * 1000);
   const bookings = Array.isArray(window.HWFServerBookings) ? window.HWFServerBookings : [];
   return bookings.some((booking) => {
     const bookingDate = normalizeIsoDateValue(booking.lesson_date || booking.date || "");
     const bookingTime = normalizeIsoTimeValue(booking.lesson_time || booking.time || "");
     const statusMeta = getBookingStatusMeta(booking.status);
-    return bookingDate === date && bookingTime === time && statusMeta.active;
+    if (!statusMeta.active) {
+      return false;
+    }
+
+    const bookingStart = parseLessonStart(bookingDate, bookingTime);
+    if (!bookingStart) {
+      return false;
+    }
+
+    const bookingEnd = new Date(bookingStart.getTime() + 60 * 60 * 1000);
+    return candidateStart < bookingEnd && bookingStart < candidateEnd;
   });
 }
 
 async function hydrateStudentFromServer(student) {
-  const serverBookings = await listServerBookingsForCurrentStudent();
+  const [serverBookings, extendedProfile] = await Promise.all([
+    listServerBookingsForCurrentStudent(),
+    loadStudentExtendedProfile(student)
+  ]);
   const firstFreeLessonBookingId = getFirstFreeLessonBookingId(serverBookings, student);
+
+  const hydratedStudent = {
+    ...student,
+    languages: extendedProfile.languages.length ? extendedProfile.languages : Array.isArray(student.languages) ? student.languages : [],
+    avatarUrl: extendedProfile.avatarUrl || student.avatarUrl || "",
+    personalization: extendedProfile.personalization || student.personalization || null,
+    goal: extendedProfile.personalization?.learning_goal || student.goal,
+    notes: student.notes || ""
+  };
 
   if (!serverBookings.length) {
     return {
-      ...student,
+      ...hydratedStudent,
       upcomingLessons: []
     };
   }
 
   return {
-    ...student,
+    ...hydratedStudent,
     upcomingLessons: serverBookings
       .map((booking) => {
         const statusMeta = getBookingStatusMeta(booking.status);
@@ -753,17 +1216,11 @@ function setStudentReviewFeedback(message, type) {
 }
 
 function getStudentAvailabilityDates() {
-  return [...new Set(
-    window.HWFData
-      .listAvailability()
-      .filter((slot) => !isAvailabilityBlockedByBooking(slot.date, slot.time))
-      .map((slot) => slot.date)
-  )].sort();
+  return [...new Set(window.HWFData.listBookableAvailability().map((slot) => slot.date))].sort();
 }
 
 function getStudentTimesForDate(date) {
-  return window.HWFData.listAvailability()
-    .filter((slot) => !isAvailabilityBlockedByBooking(slot.date, slot.time))
+  return window.HWFData.listBookableAvailability()
     .filter((slot) => slot.date === date)
     .map((slot) => slot.time)
     .sort();
@@ -832,22 +1289,11 @@ function isStudentSetupComplete(user, student) {
     return true;
   }
 
-  const hasMetadataCore =
-    hasText(metadata.full_name || metadata.name) &&
-    hasText(metadata.track) &&
-    hasText(metadata.goal) &&
-    hasText(metadata.timezone);
-  if (hasMetadataCore) {
+  if (hasText(metadata.profile_completed_at)) {
     return true;
   }
 
-  const profileLooksComplete =
-    hasText(student?.name) &&
-    hasText(student?.track) &&
-    hasText(student?.goal) &&
-    hasText(student?.timezone) &&
-    String(student?.timezone || "").trim().toLowerCase() !== "other";
-  return profileLooksComplete;
+  return false;
 }
 
 function setSelectValue(select, value) {
@@ -872,9 +1318,67 @@ function setSelectValue(select, value) {
   select.value = nextValue;
 }
 
+function isStudentSidebarMobileMode() {
+  return window.matchMedia("(max-width: 1024px)").matches;
+}
+
+function updateStudentSidebarToggleState() {
+  const isExpanded = document.body.classList.contains("teacher-sidebar-open");
+  document.querySelectorAll("[data-student-sidebar-toggle]").forEach((button) => {
+    button.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+  });
+}
+
+function closeStudentSidebar() {
+  document.body.classList.remove("teacher-sidebar-open");
+  updateStudentSidebarToggleState();
+}
+
+function setStudentDashboardAppState(isActive) {
+  document.body.classList.toggle("student-dashboard-active", Boolean(isActive));
+  document.body.classList.toggle("teacher-portal-v2", Boolean(isActive));
+  if (!isActive) {
+    document.body.classList.remove("teacher-sidebar-open");
+  }
+  updateStudentSidebarToggleState();
+}
+
+function bindStudentSidebar() {
+  if (studentSidebarBound) {
+    updateStudentSidebarToggleState();
+    return;
+  }
+
+  const toggleButtons = document.querySelectorAll("[data-student-sidebar-toggle]");
+  const backdrop = byId("student-sidebar-backdrop");
+
+  toggleButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      document.body.classList.toggle("teacher-sidebar-open");
+      updateStudentSidebarToggleState();
+    });
+  });
+
+  if (backdrop) {
+    backdrop.addEventListener("click", () => {
+      closeStudentSidebar();
+    });
+  }
+
+  window.addEventListener("resize", () => {
+    if (!isStudentSidebarMobileMode()) {
+      document.body.classList.remove("teacher-sidebar-open");
+    }
+    updateStudentSidebarToggleState();
+  });
+
+  updateStudentSidebarToggleState();
+  studentSidebarBound = true;
+}
+
 function setStudentPortalSection(section) {
   const normalized = String(section || "").trim().toLowerCase();
-  const allowed = new Set(["book", "lessons", "progress", "community"]);
+  const allowed = new Set(["book", "lessons", "progress", "community", "profile", "messages"]);
   const nextSection = allowed.has(normalized) ? normalized : "book";
   activeStudentPortalSection = nextSection;
 
@@ -890,6 +1394,14 @@ function setStudentPortalSection(section) {
     sectionNode.hidden = !isActive;
     sectionNode.classList.toggle("active", isActive);
   });
+
+  if (nextSection === "messages" && currentSupabaseUserId) {
+    void loadStudentMessagesConversation();
+  }
+
+  if (isStudentSidebarMobileMode()) {
+    closeStudentSidebar();
+  }
 }
 
 function bindStudentSectionNav() {
@@ -897,14 +1409,20 @@ function bindStudentSectionNav() {
     return;
   }
 
-  const nav = document.getElementById("student-portal-nav");
-  if (!nav) {
+  const dashboard = document.getElementById("student-dashboard");
+  if (!dashboard) {
     return;
   }
 
-  nav.querySelectorAll("[data-student-section]").forEach((button) => {
+  dashboard.querySelectorAll("[data-student-section]").forEach((button) => {
     button.addEventListener("click", () => {
       setStudentPortalSection(button.getAttribute("data-student-section"));
+    });
+  });
+
+  dashboard.querySelectorAll("[data-student-section-trigger]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setStudentPortalSection(button.getAttribute("data-student-section-trigger"));
     });
   });
 
@@ -938,13 +1456,35 @@ function openStudentSetupModal(student) {
   const timezoneSelect = document.getElementById("student-setup-timezone");
   const trackInput = document.getElementById("student-setup-track");
   const goalSelect = document.getElementById("student-setup-goal");
+  const languagesInput = document.getElementById("student-setup-languages");
+  const occupationInput = document.getElementById("student-setup-occupation");
+  const hobbiesPicker = document.getElementById("student-setup-hobbies-picker");
+  const interestsInput = document.getElementById("student-setup-interests");
+  const personalityInput = document.getElementById("student-setup-personality");
   const feedback = document.getElementById("student-setup-feedback");
 
-  if (!modal || !nameInput || !timezoneSelect || !trackInput || !goalSelect || !feedback) {
+  if (
+    !modal ||
+    !nameInput ||
+    !timezoneSelect ||
+    !trackInput ||
+    !goalSelect ||
+    !languagesInput ||
+    !occupationInput ||
+    !hobbiesPicker ||
+    !interestsInput ||
+    !personalityInput ||
+    !feedback
+  ) {
     return;
   }
 
   const metadata = currentSupabaseUser?.user_metadata || {};
+  const personalization = student?.personalization || buildStudentPersonalizationFromSources({
+    personalizationRow: null,
+    metadata,
+    fallbackGoal: student?.goal || ""
+  });
   const fallbackTimezone = (() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
@@ -957,12 +1497,17 @@ function openStudentSetupModal(student) {
     String(student?.name || metadata.full_name || metadata.name || currentSupabaseUser?.email?.split("@")[0] || "").trim();
   const seededTimezone = String(student?.timezone || metadata.timezone || fallbackTimezone).trim();
   const seededTrack = String(student?.track || metadata.track || "1-on-1").trim();
-  const seededGoal = String(student?.goal || metadata.goal || "Free trial lesson").trim();
+  const seededGoal = String(personalization.learning_goal || student?.goal || metadata.goal || "Free trial lesson").trim();
 
   nameInput.value = seededName;
   trackInput.value = seededTrack;
   setSelectValue(timezoneSelect, seededTimezone);
   setSelectValue(goalSelect, seededGoal);
+  languagesInput.value = joinStudentCsvText(student?.languages || splitStudentCsvText(metadata.community_languages || ""));
+  occupationInput.value = String(personalization.occupation || "").trim();
+  renderStudentHobbyPicker("setup", normalizeStudentHobbySelection(personalization.hobbies || ""));
+  interestsInput.value = String(personalization.interests || "").trim();
+  personalityInput.value = String(personalization.personality_notes || "").trim();
   feedback.hidden = true;
   modal.hidden = false;
 }
@@ -984,6 +1529,7 @@ function maybeOpenStudentSetupModal(student) {
     return;
   }
 
+  setStudentPortalSection("profile");
   openStudentSetupModal(student);
 }
 
@@ -1014,22 +1560,50 @@ function renderStudentProfileEditor(student) {
   const timezoneInput = document.getElementById("student-profile-timezone-input");
   const trackInput = document.getElementById("student-profile-track-input");
   const goalInput = document.getElementById("student-profile-goal-input");
+  const languagesInput = document.getElementById("student-profile-languages-input");
+  const occupationInput = document.getElementById("student-profile-occupation-input");
+  const hobbiesPicker = document.getElementById("student-profile-hobbies-picker");
+  const interestsInput = document.getElementById("student-profile-interests-input");
+  const personalityInput = document.getElementById("student-profile-personality-input");
   const notesInput = document.getElementById("student-profile-notes-input");
   const avatarInput = document.getElementById("student-profile-avatar-url");
   const preview = document.getElementById("student-profile-avatar-preview");
 
-  if (!nameInput || !timezoneInput || !trackInput || !goalInput || !notesInput || !avatarInput || !preview) {
+  if (
+    !nameInput ||
+    !timezoneInput ||
+    !trackInput ||
+    !goalInput ||
+    !languagesInput ||
+    !occupationInput ||
+    !hobbiesPicker ||
+    !interestsInput ||
+    !personalityInput ||
+    !notesInput ||
+    !avatarInput ||
+    !preview
+  ) {
     return;
   }
 
   const metadata = currentSupabaseUser?.user_metadata || {};
-  const avatarUrl = String(metadata.avatar_url || "").trim();
+  const personalization = student?.personalization || buildStudentPersonalizationFromSources({
+    personalizationRow: null,
+    metadata,
+    fallbackGoal: student?.goal || ""
+  });
+  const avatarUrl = String(student?.avatarUrl || metadata.avatar_url || "").trim();
 
   nameInput.value = student.name || "";
-  timezoneInput.value = student.timezone || "";
+  setSelectValue(timezoneInput, student.timezone || "");
   trackInput.value = student.track || "";
-  goalInput.value = student.goal || "";
-  notesInput.value = student.notes || student.coachNote || "";
+  setSelectValue(goalInput, student.goal || "");
+  languagesInput.value = joinStudentCsvText(student.languages || splitStudentCsvText(metadata.community_languages || ""));
+  occupationInput.value = String(personalization.occupation || "").trim();
+  renderStudentHobbyPicker("profile", normalizeStudentHobbySelection(personalization.hobbies || ""));
+  interestsInput.value = String(personalization.interests || "").trim();
+  personalityInput.value = String(personalization.personality_notes || "").trim();
+  notesInput.value = student.notes || "";
   avatarInput.value = avatarUrl;
   preview.src = avatarUrl || DEFAULT_PROFILE_AVATAR;
 }
@@ -1049,6 +1623,417 @@ function getApiBaseUrl() {
       ? window.HWF_APP_CONFIG.apiBase.trim()
       : "";
   return configuredApiBase || window.location.origin;
+}
+
+function escapeStudentMessageHtml(text) {
+  const map = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  };
+
+  return String(text || "").replace(/[&<>"']/g, (character) => map[character]);
+}
+
+async function getStudentPortalAccessToken() {
+  if (!window.supabaseClient) {
+    return "";
+  }
+
+  const {
+    data: { session }
+  } = await window.supabaseClient.auth.getSession();
+
+  return session?.access_token || "";
+}
+
+async function authorizedStudentPortalFetch(url, options = {}) {
+  const accessToken = await getStudentPortalAccessToken();
+  if (!accessToken) {
+    throw new Error("Your session expired. Please sign in again.");
+  }
+
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", `Bearer ${accessToken}`);
+
+  return fetch(url, {
+    ...options,
+    headers
+  });
+}
+
+function clearStudentMessagesSubscription() {
+  if (!studentMessagesSubscription || !window.supabaseClient) {
+    studentMessagesSubscription = null;
+    return;
+  }
+
+  window.supabaseClient.removeChannel(studentMessagesSubscription);
+  studentMessagesSubscription = null;
+}
+
+function stopStudentMessagesPolling() {
+  if (!studentMessagesRefreshTimerId) {
+    return;
+  }
+
+  window.clearInterval(studentMessagesRefreshTimerId);
+  studentMessagesRefreshTimerId = 0;
+}
+
+function startStudentMessagesPolling() {
+  stopStudentMessagesPolling();
+  studentMessagesRefreshTimerId = window.setInterval(() => {
+    if (!studentMessagesConversationId) {
+      return;
+    }
+
+    void loadStudentConversationMessages();
+  }, 5000);
+}
+
+function resetStudentMessagesState() {
+  studentMessagesConversationId = "";
+  studentMessagesPartner = null;
+  clearStudentMessagesSubscription();
+  stopStudentMessagesPolling();
+
+  const container = byId("student-messages-container");
+  if (container) {
+    container.dataset.messagesReady = "0";
+    container.innerHTML = '<p style="color: #999; text-align: center;">Loading messages...</p>';
+  }
+
+  studentMessagesBound = false;
+}
+
+function ensureStudentMessagesLayout() {
+  const container = byId("student-messages-container");
+  if (!container) {
+    return null;
+  }
+
+  if (container.dataset.messagesReady === "1") {
+    return container;
+  }
+
+  container.dataset.messagesReady = "1";
+  container.innerHTML = `
+    <div class="messages-shell student-messages-shell">
+      <div class="messages-container whatsapp-layout student-messages-layout">
+        <div class="messages-content whatsapp-chat-content">
+          <div class="chat-empty whatsapp-chat-empty" id="student-chat-empty">
+            <div>
+              <div class="chat-empty-icon">M</div>
+              <p class="chat-empty-title">Chat with your teacher</p>
+              <p class="chat-empty-text" id="student-chat-empty-text">Open this section to start a direct conversation.</p>
+            </div>
+          </div>
+
+          <div class="chat-thread whatsapp-chat-thread" id="student-chat-thread" hidden>
+            <div class="chat-header whatsapp-chat-header">
+              <div class="whatsapp-chat-person">
+                <div class="whatsapp-chat-avatar" id="student-chat-user-avatar">T</div>
+                <div>
+                  <h3 id="student-chat-user-name">Teacher</h3>
+                  <p id="student-chat-user-role" class="chat-user-role"></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="chat-messages-scroll whatsapp-chat-scroll" id="student-chat-messages-scroll">
+              <div class="chat-messages" id="student-chat-messages"></div>
+            </div>
+
+            <div class="chat-input-area whatsapp-chat-input-area">
+              <div class="booking-feedback" id="student-message-error" hidden></div>
+              <div class="chat-input-form whatsapp-composer">
+                <textarea id="student-message-input" class="message-textarea" placeholder="Type a message..." rows="2"></textarea>
+                <button id="student-send-message-btn" class="btn-submit" type="button">Send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  bindStudentMessagesSection();
+  return container;
+}
+
+function setStudentMessagesFeedback(message, type) {
+  const feedback = byId("student-message-error");
+  if (!feedback) {
+    return;
+  }
+
+  if (!hasText(String(message || ""))) {
+    feedback.hidden = true;
+    feedback.textContent = "";
+    return;
+  }
+
+  feedback.textContent = String(message || "");
+  feedback.className = `booking-feedback ${type}`;
+  feedback.hidden = false;
+}
+
+function createStudentPortalMessageElement(message) {
+  const element = document.createElement("div");
+  const isOwn = String(message?.sender_id || "") === String(currentSupabaseUserId || "");
+  const timestamp = new Date(message.created_at).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+
+  element.className = `message ${isOwn ? "sent" : "received"}`;
+  element.innerHTML = `
+    <div class="message-content">${escapeStudentMessageHtml(message?.body || "")}</div>
+    <div class="message-time">${timestamp}</div>
+  `;
+
+  return element;
+}
+
+function renderStudentMessagesFromPayload({ partner, messages }) {
+  ensureStudentMessagesLayout();
+
+  const chatEmpty = byId("student-chat-empty");
+  const chatThread = byId("student-chat-thread");
+  const chatUserName = byId("student-chat-user-name");
+  const chatUserRole = byId("student-chat-user-role");
+  const chatUserAvatar = byId("student-chat-user-avatar");
+  const messagesContainer = byId("student-chat-messages");
+  const scroll = byId("student-chat-messages-scroll");
+  const resolvedPartner = partner || studentMessagesPartner || null;
+
+  if (chatEmpty) {
+    chatEmpty.hidden = true;
+  }
+  if (chatThread) {
+    chatThread.hidden = false;
+  }
+  if (chatUserName) {
+    chatUserName.textContent = resolvedPartner?.name || "Teacher";
+  }
+  if (chatUserRole) {
+    chatUserRole.textContent = resolvedPartner?.subtitle || "Spanish Teacher";
+  }
+  if (chatUserAvatar) {
+    chatUserAvatar.textContent = String(resolvedPartner?.avatar || resolvedPartner?.name || "T").trim().charAt(0).toUpperCase() || "T";
+  }
+
+  if (!messagesContainer) {
+    return;
+  }
+
+  messagesContainer.innerHTML = "";
+  if (!Array.isArray(messages) || !messages.length) {
+    messagesContainer.innerHTML =
+      '<div style="text-align: center; color: #7d6c61; padding: 40px; font-size: 0.9rem;">No messages yet. Say hello to start the conversation.</div>';
+    return;
+  }
+
+  messages.forEach((message) => {
+    messagesContainer.appendChild(createStudentPortalMessageElement(message));
+
+    const unreadByStudent =
+      String(message?.sender_id || "") !== String(currentSupabaseUserId || "") &&
+      !message?.message_read_status?.some((status) => String(status?.reader_id || "") === String(currentSupabaseUserId || ""));
+
+    if (unreadByStudent) {
+      void markStudentPortalMessageAsRead(message.id);
+    }
+  });
+
+  if (scroll) {
+    scroll.scrollTop = scroll.scrollHeight;
+  }
+}
+
+async function markStudentPortalMessageAsRead(messageId) {
+  try {
+    await authorizedStudentPortalFetch(`${getApiBaseUrl()}/api/messages/${encodeURIComponent(String(messageId || ""))}/read`, {
+      method: "POST"
+    });
+  } catch {}
+}
+
+async function loadStudentConversationMessages() {
+  if (!studentMessagesConversationId) {
+    return;
+  }
+
+  try {
+    const response = await authorizedStudentPortalFetch(
+      `${getApiBaseUrl()}/api/messages/conversations/${encodeURIComponent(studentMessagesConversationId)}`
+    );
+    const payload = await response.json().catch(() => ({
+      ok: false,
+      error: `Failed to load messages (${response.status}).`
+    }));
+
+    if (!response.ok || payload?.ok !== true) {
+      throw new Error(String(payload?.error || payload?.message || `Failed to load messages (${response.status}).`));
+    }
+
+    renderStudentMessagesFromPayload({
+      partner: studentMessagesPartner,
+      messages: payload.messages || []
+    });
+  } catch (error) {
+    setStudentMessagesFeedback(error instanceof Error ? error.message : "Could not load messages right now.", "error");
+  }
+}
+
+function subscribeToStudentMessages() {
+  if (!studentMessagesConversationId || !window.supabaseClient) {
+    return;
+  }
+
+  clearStudentMessagesSubscription();
+  studentMessagesSubscription = window.supabaseClient
+    .channel(`student-messages:${studentMessagesConversationId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter: `conversation_id=eq.${studentMessagesConversationId}`
+      },
+      () => {
+        void loadStudentConversationMessages();
+      }
+    )
+    .subscribe();
+}
+
+async function loadStudentMessagesConversation() {
+  ensureStudentMessagesLayout();
+
+  const emptyState = byId("student-chat-empty");
+  const emptyText = byId("student-chat-empty-text");
+  const thread = byId("student-chat-thread");
+  if (emptyState) {
+    emptyState.hidden = false;
+  }
+  if (thread) {
+    thread.hidden = true;
+  }
+  if (emptyText) {
+    emptyText.textContent = "Loading conversation...";
+  }
+
+  setStudentMessagesFeedback("", "success");
+
+  try {
+    const response = await authorizedStudentPortalFetch(`${getApiBaseUrl()}/api/messages/default-conversation`);
+    const payload = await response.json().catch(() => ({
+      ok: false,
+      error: `Failed to open chat (${response.status}).`
+    }));
+
+    if (!response.ok || payload?.ok !== true || !payload?.conversation?.id) {
+      throw new Error(String(payload?.error || payload?.message || `Failed to open chat (${response.status}).`));
+    }
+
+    studentMessagesConversationId = String(payload.conversation.id || "").trim();
+    studentMessagesPartner = payload.partner || null;
+    renderStudentMessagesFromPayload({
+      partner: studentMessagesPartner,
+      messages: payload.messages || []
+    });
+    subscribeToStudentMessages();
+    startStudentMessagesPolling();
+  } catch (error) {
+    if (emptyText) {
+      emptyText.textContent = error instanceof Error ? error.message : "Chat is not available right now.";
+    }
+    setStudentMessagesFeedback(error instanceof Error ? error.message : "Could not open chat right now.", "error");
+  }
+}
+
+async function sendStudentPortalMessage() {
+  if (!studentMessagesConversationId) {
+    await loadStudentMessagesConversation();
+  }
+
+  const input = byId("student-message-input");
+  const sendButton = byId("student-send-message-btn");
+  if (!input || !sendButton || !studentMessagesConversationId) {
+    return;
+  }
+
+  const body = String(input.value || "").trim();
+  if (!body) {
+    return;
+  }
+
+  sendButton.disabled = true;
+  setStudentMessagesFeedback("", "success");
+
+  try {
+    const response = await authorizedStudentPortalFetch(`${getApiBaseUrl()}/api/messages/send`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        conversationId: studentMessagesConversationId,
+        body
+      })
+    });
+    const payload = await response.json().catch(() => ({
+      ok: false,
+      error: `Failed to send message (${response.status}).`
+    }));
+
+    if (!response.ok || payload?.ok !== true) {
+      throw new Error(String(payload?.error || payload?.message || `Failed to send message (${response.status}).`));
+    }
+
+    input.value = "";
+    input.style.height = "auto";
+    await loadStudentConversationMessages();
+  } catch (error) {
+    setStudentMessagesFeedback(error instanceof Error ? error.message : "Could not send your message.", "error");
+  } finally {
+    sendButton.disabled = false;
+  }
+}
+
+function bindStudentMessagesSection() {
+  if (studentMessagesBound) {
+    return;
+  }
+
+  const sendButton = byId("student-send-message-btn");
+  const input = byId("student-message-input");
+  if (!sendButton || !input) {
+    return;
+  }
+
+  sendButton.addEventListener("click", () => {
+    void sendStudentPortalMessage();
+  });
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void sendStudentPortalMessage();
+    }
+  });
+
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
+  });
+
+  studentMessagesBound = true;
 }
 
 async function requestStripeCheckoutSession(url, accessToken, body) {
@@ -1306,7 +2291,7 @@ function renderStudentBookingTimes() {
   }
 
   const times = getStudentTimesForDate(selectedStudentBookingDate);
-  caption.textContent = `${formatStudentLongDate(selectedStudentBookingDate)} has ${times.length} available time${times.length === 1 ? "" : "s"}.`;
+  caption.textContent = `${formatStudentLongDate(selectedStudentBookingDate)} has ${times.length} available 1-hour start time${times.length === 1 ? "" : "s"}.`;
 
   if (!times.length) {
     container.innerHTML = '<p class="booking-empty-state">No open times remain on that day.</p>';
@@ -1396,6 +2381,8 @@ function renderStudentDashboard(student) {
     ? `${formatStudentDate(nextLesson.date, nextLesson.time)} at ${nextLesson.time}`
     : "No lesson booked yet";
 
+  setText("student-topbar-name", student.name || "Student");
+  setText("student-topbar-track", `${student.track} • Level ${student.level}`);
   setText("student-dashboard-title", `Welcome back, ${student.name}`);
   setText("student-summary-caption", summaryCaption);
   setText("student-next-lesson-summary", nextLessonSummary);
@@ -1584,24 +2571,6 @@ function renderStudentDashboard(student) {
     updateStudentMeetingButtons();
   }
 
-  document.getElementById("student-history").innerHTML = student.lessonHistory
-    .map((lesson) => {
-      return `
-        <article class="list-card">
-          <div class="list-card-top">
-            <strong>${lesson.topic}</strong>
-            <span class="status-pill muted">${lesson.status}</span>
-          </div>
-          <p>${new Date(`${lesson.date}T00:00:00`).toLocaleDateString("en-GB", {
-            month: "short",
-            day: "numeric",
-            year: "numeric"
-          })}</p>
-        </article>
-      `;
-    })
-    .join("");
-
   renderStudentProfileEditor(student);
   renderStudentBookingSection();
   populateStudentReviewForm(student);
@@ -1631,6 +2600,11 @@ function bindStudentProfileEditor() {
     const timezone = document.getElementById("student-profile-timezone-input").value.trim();
     const track = document.getElementById("student-profile-track-input").value.trim();
     const goal = document.getElementById("student-profile-goal-input").value.trim();
+    const languagesText = document.getElementById("student-profile-languages-input").value.trim();
+    const occupation = document.getElementById("student-profile-occupation-input").value.trim();
+    const hobbies = getSelectedStudentHobbies("profile");
+    const interests = document.getElementById("student-profile-interests-input").value.trim();
+    const personalityNotes = document.getElementById("student-profile-personality-input").value.trim();
     const notes = document.getElementById("student-profile-notes-input").value.trim();
     const avatarUrl = document.getElementById("student-profile-avatar-url").value.trim();
 
@@ -1639,79 +2613,51 @@ function bindStudentProfileEditor() {
       return;
     }
 
+    if (hobbies.length < 3) {
+      setStudentProfileFeedback("Choose at least 3 hobbies.", "error");
+      return;
+    }
+
     saveButton.disabled = true;
     try {
-      const { error: profileError } = await window.supabaseClient
-        .from("profiles")
-        .update({
-          full_name: fullName,
-          timezone: timezone || "other",
-          track: track || "1-on-1",
-          goal: goal || "Conversation",
-          notes
-        })
-        .eq("id", currentSupabaseUserId);
+      const saveResult = await persistStudentProfileData({
+        fullName,
+        timezone,
+        track,
+        goal,
+        notes,
+        avatarUrl,
+        languagesText,
+        occupation,
+        hobbies,
+        interests,
+        personalityNotes
+      });
 
-      if (profileError) {
-        setStudentProfileFeedback(profileError.message || "Could not save profile details.", "error");
+      if (!saveResult.ok) {
+        setStudentProfileFeedback(saveResult.error || "Could not save profile details.", "error");
         return;
       }
-
-      const metadataPayload = {
-        full_name: fullName,
-        timezone: timezone || "other",
-        track: track || "1-on-1",
-        goal: goal || "Conversation",
-        notes,
-        avatar_url: avatarUrl || ""
-      };
-
-      const { error: authError } = await window.supabaseClient.auth.updateUser({
-        data: metadataPayload
-      });
-
-      if (!authError && currentSupabaseUser) {
-        currentSupabaseUser = {
-          ...currentSupabaseUser,
-          user_metadata: {
-            ...(currentSupabaseUser.user_metadata || {}),
-            ...metadataPayload
-          }
-        };
-      }
-
-      const updatedStudent = window.HWFData.ensureStudentFromProfile({
-        id: currentSupabaseUserId,
-        email: currentStudent.email,
-        full_name: fullName,
-        name: fullName,
-        level: currentStudent.level || "Beginner",
-        track: track || "1-on-1",
-        timezone: timezone || "other",
-        goal: goal || "Conversation",
-        notes
-      });
 
       const hydratedStudent = await hydrateStudentFromServer({
         ...currentStudent,
-        ...updatedStudent,
-        name: fullName,
-        track: track || "1-on-1",
-        timezone: timezone || "other",
-        goal: goal || "Conversation",
-        notes
+        name: saveResult.data.fullName,
+        track: saveResult.data.track,
+        timezone: saveResult.data.timezone,
+        goal: saveResult.data.goal,
+        notes: saveResult.data.notes,
+        avatarUrl: saveResult.data.avatarUrl,
+        languages: saveResult.data.languages,
+        personalization: saveResult.data.personalization
       });
       renderStudentDashboard(hydratedStudent);
 
-      if (authError) {
-        setStudentProfileFeedback(
-          `Profile saved, but auth metadata update failed: ${authError.message || "Unknown error"}`,
-          "error"
-        );
-        return;
-      }
-
-      setStudentProfileFeedback("Profile updated.", "success");
+      setStudentProfileFeedback(
+        saveResult.profileCompleted
+          ? "Profile updated. Your teacher can now use these details to personalize lessons."
+          : "Profile saved. Complete the remaining fields to finish your setup.",
+        "success"
+      );
     } finally {
       saveButton.disabled = false;
     }
@@ -1740,65 +2686,54 @@ function bindStudentSetupModal() {
     const timezone = String(document.getElementById("student-setup-timezone")?.value || "").trim();
     const track = String(document.getElementById("student-setup-track")?.value || "").trim();
     const goal = String(document.getElementById("student-setup-goal")?.value || "").trim();
+    const languagesText = String(document.getElementById("student-setup-languages")?.value || "").trim();
+    const occupation = String(document.getElementById("student-setup-occupation")?.value || "").trim();
+    const hobbies = getSelectedStudentHobbies("setup");
+    const interests = String(document.getElementById("student-setup-interests")?.value || "").trim();
+    const personalityNotes = String(document.getElementById("student-setup-personality")?.value || "").trim();
 
-    if (!fullName || !timezone || !track || !goal) {
-      setStudentSetupFeedback("Please complete all fields.", "error");
+    if (!fullName || !timezone || !track || !goal || !splitStudentCsvText(languagesText).length || !occupation || hobbies.length < 3 || !interests || !personalityNotes) {
+      setStudentSetupFeedback("Please complete every field so your teacher has enough context to personalize lessons.", "error");
       return;
     }
 
     saveButton.disabled = true;
     try {
-      const { error: profileError } = await window.supabaseClient
-        .from("profiles")
-        .update({
-          full_name: fullName,
-          timezone,
-          track,
-          goal
-        })
-        .eq("id", currentSupabaseUserId);
-
-      if (profileError) {
-        setStudentSetupFeedback(profileError.message || "Could not save setup.", "error");
-        return;
-      }
-
-      const metadataPayload = {
-        full_name: fullName,
+      const saveResult = await persistStudentProfileData({
+        fullName,
         timezone,
         track,
         goal,
-        profile_completed: true,
-        profile_completed_at: new Date().toISOString()
-      };
-
-      const { error: authError } = await window.supabaseClient.auth.updateUser({
-        data: metadataPayload
+        notes: currentStudent.notes || "",
+        avatarUrl: currentStudent.avatarUrl || currentSupabaseUser?.user_metadata?.avatar_url || "",
+        languagesText,
+        occupation,
+        hobbies,
+        interests,
+        personalityNotes,
+        forceProfileCompleted: true
       });
 
-      if (authError) {
-        setStudentSetupFeedback(authError.message || "Could not finish setup.", "error");
+      if (!saveResult.ok) {
+        setStudentSetupFeedback(saveResult.error || "Could not finish setup.", "error");
         return;
       }
 
-      currentSupabaseUser = {
-        ...currentSupabaseUser,
-        user_metadata: {
-          ...(currentSupabaseUser.user_metadata || {}),
-          ...metadataPayload
-        }
-      };
-
       const refreshedStudent = await hydrateStudentFromServer({
         ...currentStudent,
-        name: fullName,
-        timezone,
-        track,
-        goal
+        name: saveResult.data.fullName,
+        timezone: saveResult.data.timezone,
+        track: saveResult.data.track,
+        goal: saveResult.data.goal,
+        notes: saveResult.data.notes,
+        avatarUrl: saveResult.data.avatarUrl,
+        languages: saveResult.data.languages,
+        personalization: saveResult.data.personalization
       });
+      activeStudentPortalSection = "profile";
       renderStudentDashboard(refreshedStudent);
       closeStudentSetupModal();
-      setStudentBookingFeedback("Profile setup saved. You can edit details later in My Profile.", "success");
+      setStudentProfileFeedback("Profile setup saved. Your teacher can now personalize your lessons better.", "success");
     } finally {
       saveButton.disabled = false;
     }
@@ -1839,13 +2774,13 @@ function bindStudentBookingSection() {
       return;
     }
 
-    const matchingSlot = window.HWFData
+    const lessonBlockTimes = window.HWFData.getLessonBlockTimes(bookingPayload.time);
+    window.HWFData
       .listAvailability()
-      .find((slot) => slot.date === bookingPayload.date && slot.time === bookingPayload.time);
-
-    if (matchingSlot) {
-      window.HWFData.removeAvailabilitySlot(matchingSlot.id);
-    }
+      .filter((slot) => slot.date === bookingPayload.date && lessonBlockTimes.includes(slot.time))
+      .forEach((slot) => {
+        window.HWFData.removeAvailabilitySlot(slot.id);
+      });
 
     document.getElementById("student-booking-message").value = "";
     await loadActiveServerBookingsForAvailability();
@@ -2045,12 +2980,14 @@ function bindStudentLogin() {
       window.clearInterval(studentMeetingTickerId);
       studentMeetingTickerId = 0;
     }
+    resetStudentMessagesState();
     activeStudentPortalSection = "book";
     selectedStudentRating = 0;
     selectedStudentBookingDate = "";
     selectedStudentBookingTime = "";
     await window.supabaseClient.auth.signOut();
     closeStudentSetupModal();
+    setStudentDashboardAppState(false);
     document.getElementById("student-login-card").hidden = false;
     document.getElementById("student-dashboard").hidden = true;
     document.getElementById("student-email").value = "";
@@ -2069,7 +3006,12 @@ function bindStudentLogin() {
 function initStudentPortal() {
   window.HWFData.ensurePortalState();
   startStudentMeetingTicker();
+  bindStudentHobbyPickers();
+  renderStudentHobbyPicker("profile", []);
+  renderStudentHobbyPicker("setup", []);
   bindStudentSectionNav();
+  bindStudentSidebar();
+  setStudentDashboardAppState(false);
   bindStudentLogin();
   bindStudentProfileEditor();
   bindStudentSetupModal();

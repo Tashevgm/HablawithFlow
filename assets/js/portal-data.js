@@ -5,6 +5,8 @@ const DEMO_STUDENT_EMAILS = new Set([
   "james@hablawithflow.com",
   "nina@hablawithflow.com"
 ]);
+const LESSON_DURATION_MINUTES = 60;
+const AVAILABILITY_BLOCK_MINUTES = 30;
 
 const DEFAULT_PORTAL_STATE = {
   availability: [
@@ -54,13 +56,23 @@ function normalizeEmail(email) {
   return email.trim().toLowerCase();
 }
 
-function normalizeTimeToHour(time) {
-  if (typeof time !== "string" || !/^\d{2}:\d{2}$/.test(time)) {
-    return time;
+function normalizeSlotTime(time) {
+  const normalized = normalizeIsoTimeValue(time);
+  if (normalized) {
+    return normalized;
   }
 
-  const [hours] = time.split(":");
-  return `${hours}:00`;
+  const raw = String(time || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const timeMatch = raw.match(/^(\d{1,2}):(\d{1,2})/);
+  if (timeMatch) {
+    return `${String(Number(timeMatch[1])).padStart(2, "0")}:${String(Number(timeMatch[2])).padStart(2, "0")}`;
+  }
+
+  return raw.slice(0, 5);
 }
 
 function normalizeIsoDateValue(value) {
@@ -114,6 +126,86 @@ function parseSlotDateTime(date, time) {
   }
 
   return parsed;
+}
+
+function timeToMinutes(time) {
+  const normalized = normalizeSlotTime(time);
+  const timeMatch = normalized.match(/^(\d{2}):(\d{2})$/);
+  if (!timeMatch) {
+    return null;
+  }
+
+  return Number(timeMatch[1]) * 60 + Number(timeMatch[2]);
+}
+
+function minutesToTime(totalMinutes) {
+  const dayMinutes = 24 * 60;
+  const normalized = ((totalMinutes % dayMinutes) + dayMinutes) % dayMinutes;
+  const hours = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function addMinutesToSlotTime(time, minutes) {
+  const totalMinutes = timeToMinutes(time);
+  if (totalMinutes === null) {
+    return "";
+  }
+
+  return minutesToTime(totalMinutes + minutes);
+}
+
+function getLessonBlockTimes(startTime, durationMinutes = LESSON_DURATION_MINUTES) {
+  const normalizedStart = normalizeSlotTime(startTime);
+  const blockCount = Math.ceil(durationMinutes / AVAILABILITY_BLOCK_MINUTES);
+  if (!normalizedStart || blockCount <= 0) {
+    return [];
+  }
+
+  return Array.from({ length: blockCount }, (_, index) => {
+    return addMinutesToSlotTime(normalizedStart, index * AVAILABILITY_BLOCK_MINUTES);
+  }).filter(Boolean);
+}
+
+function getTimeWindow(date, time, durationMinutes) {
+  const start = parseSlotDateTime(date, normalizeSlotTime(time));
+  if (!start) {
+    return null;
+  }
+
+  return {
+    start,
+    end: new Date(start.getTime() + durationMinutes * 60 * 1000)
+  };
+}
+
+function doTimeWindowsOverlap(left, right) {
+  return left.start < right.end && right.start < left.end;
+}
+
+function overlapsActiveBooking(date, time, durationMinutes, bookings = getAuthoritativeBookings()) {
+  const candidate = getTimeWindow(date, time, durationMinutes);
+  if (!candidate) {
+    return false;
+  }
+
+  return bookings.some((booking) => {
+    if (!getBookingStatusMeta(booking.status).active) {
+      return false;
+    }
+
+    const bookedWindow = getTimeWindow(booking.date, booking.time, LESSON_DURATION_MINUTES);
+    return bookedWindow ? doTimeWindowsOverlap(candidate, bookedWindow) : false;
+  });
+}
+
+function hasCompleteLessonWindow(date, time, availabilitySet) {
+  const requiredTimes = getLessonBlockTimes(time);
+  if (!requiredTimes.length) {
+    return false;
+  }
+
+  return requiredTimes.every((blockTime) => availabilitySet.has(`${date}T${blockTime}`));
 }
 
 function isFutureAvailabilitySlot(slot, now = new Date()) {
@@ -220,7 +312,7 @@ function normalizeBookingRecord(booking) {
   return {
     ...booking,
     date,
-    time: normalizedTime || (typeof rawTime === "string" ? rawTime.slice(0, 5) : normalizeTimeToHour(rawTime)),
+    time: normalizedTime || normalizeSlotTime(rawTime),
     studentName: booking.studentName || booking.student_name || "",
     lessonType: booking.lessonType || booking.lesson_type || "",
     message: booking.message || "",
@@ -244,7 +336,7 @@ function normalizeStudent(student) {
     upcomingLessons: Array.isArray(student.upcomingLessons)
       ? student.upcomingLessons.map((lesson) => ({
           ...lesson,
-          time: normalizeTimeToHour(lesson.time)
+          time: normalizeSlotTime(lesson.time)
         }))
       : [],
     lessonHistory: Array.isArray(student.lessonHistory) ? student.lessonHistory : [],
@@ -377,14 +469,14 @@ function sanitizePortalState(state) {
       ? uniqueByDateTime(
           state.availability.map((slot) => ({
             ...slot,
-            time: normalizeTimeToHour(slot.time)
+            time: normalizeSlotTime(slot.time)
           }))
         ).filter((slot) => isFutureAvailabilitySlot(slot))
       : deepClone(DEFAULT_PORTAL_STATE.availability),
     bookings: Array.isArray(state?.bookings)
       ? state.bookings.map((booking) => ({
           ...booking,
-          time: normalizeTimeToHour(booking.time)
+          time: normalizeSlotTime(booking.time)
         }))
       : [],
     students: Array.isArray(state?.students) ? state.students : [],
@@ -468,6 +560,16 @@ function listAvailability() {
   }
 
   return sortByDateTime(nextAvailability);
+}
+
+function listBookableAvailability() {
+  const availability = listAvailability();
+  const availabilitySet = new Set(availability.map((slot) => `${slot.date}T${slot.time}`));
+
+  return availability.filter((slot) => {
+    return hasCompleteLessonWindow(slot.date, slot.time, availabilitySet)
+      && !overlapsActiveBooking(slot.date, slot.time, LESSON_DURATION_MINUTES);
+  });
 }
 
 function listBookings() {
@@ -753,17 +855,14 @@ function registerStudent(registration) {
 function addAvailabilitySlot(slot) {
   const state = readPortalState();
   const date = slot.date;
-  const time = normalizeTimeToHour(slot.time);
+  const time = normalizeSlotTime(slot.time);
   const candidate = { date, time };
 
   if (!isFutureAvailabilitySlot(candidate)) {
     return { ok: false, error: "Cannot add a slot in the past." };
   }
 
-  const hasBooking = getAuthoritativeBookings().some((entry) => {
-    return entry.date === date && entry.time === time && getBookingStatusMeta(entry.status).active;
-  });
-  if (hasBooking) {
+  if (overlapsActiveBooking(date, time, AVAILABILITY_BLOCK_MINUTES)) {
     return { ok: false, error: "That time is already booked." };
   }
 
@@ -790,7 +889,7 @@ function addAvailabilitySlots(slots) {
 
   slots.forEach((slot) => {
     const date = slot.date;
-    const time = normalizeTimeToHour(slot.time);
+    const time = normalizeSlotTime(slot.time);
     const candidate = { date, time };
 
     if (!isFutureAvailabilitySlot(candidate)) {
@@ -798,9 +897,7 @@ function addAvailabilitySlots(slots) {
       return;
     }
 
-    const hasBooking = authoritativeBookings.some((entry) => {
-      return entry.date === date && entry.time === time && getBookingStatusMeta(entry.status).active;
-    });
+    const hasBooking = overlapsActiveBooking(date, time, AVAILABILITY_BLOCK_MINUTES, authoritativeBookings);
     const duplicate = state.availability.some((entry) => entry.date === date && entry.time === time);
 
     if (hasBooking || duplicate) {
@@ -838,24 +935,32 @@ function createBooking(booking) {
   const state = readPortalState();
   const normalizedEmail = normalizeEmail(booking.email);
   const bookingDate = booking.date;
-  const bookingTime = normalizeTimeToHour(booking.time);
+  const bookingTime = normalizeSlotTime(booking.time);
+  const requiredTimes = getLessonBlockTimes(bookingTime);
 
   if (!isFutureAvailabilitySlot({ date: bookingDate, time: bookingTime })) {
     return { ok: false, error: "That lesson time has already passed. Please choose a future slot." };
   }
 
+  if (!requiredTimes.length || overlapsActiveBooking(bookingDate, bookingTime, LESSON_DURATION_MINUTES)) {
+    return { ok: false, error: "That lesson time is no longer available." };
+  }
+
   const existingRegistration = readRegistrations().find((registration) => {
     return normalizeEmail(registration.email) === normalizedEmail;
   }) || null;
-  const matchingSlot = state.availability.find((slot) => {
-    return slot.date === bookingDate && slot.time === bookingTime;
-  });
+  const matchingSlots = requiredTimes
+    .map((time) => {
+      return state.availability.find((slot) => slot.date === bookingDate && slot.time === time) || null;
+    })
+    .filter(Boolean);
 
-  if (!matchingSlot) {
+  if (matchingSlots.length !== requiredTimes.length) {
     return { ok: false, error: "That time slot is no longer available." };
   }
 
-  state.availability = state.availability.filter((slot) => slot.id !== matchingSlot.id);
+  const matchingSlotIds = new Set(matchingSlots.map((slot) => slot.id));
+  state.availability = state.availability.filter((slot) => !matchingSlotIds.has(slot.id));
 
   const savedBooking = {
     id: buildId("booking"),
@@ -885,8 +990,8 @@ function createBooking(booking) {
     matchingStudent.upcomingLessons = sortByDateTime([
       ...matchingStudent.upcomingLessons,
       {
-        date: booking.date,
-        time: booking.time,
+        date: bookingDate,
+        time: bookingTime,
         topic: booking.lessonType
       }
     ]);
@@ -914,7 +1019,8 @@ function createBooking(booking) {
 
   upsertRegistrationFromBooking({
     ...booking,
-    email: normalizedEmail
+    email: normalizedEmail,
+    time: bookingTime
   }, matchingStudent);
 
   writePortalState(state);
@@ -957,6 +1063,7 @@ function updateStudentProgress(studentId, updates) {
 window.HWFData = {
   ensurePortalState,
   listAvailability,
+  listBookableAvailability,
   listBookings,
   listStudents,
   listStudentGroups,
@@ -976,6 +1083,7 @@ window.HWFData = {
   registerStudent,
   addAvailabilitySlot,
   addAvailabilitySlots,
+  getLessonBlockTimes,
   removeAvailabilitySlot,
   createBooking,
   updateStudentProgress
